@@ -1,0 +1,6 @@
+Main-Class: Updater
+Permissions: all-permissions
+Application-Name: Updater
+Codebase: *
+Application-Library-Allowable-Codebase: *
+Caller-Allowable-Codebase: *

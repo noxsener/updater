@@ -1,0 +1,4 @@
+#!/bin/sh
+
+# we'll magically try to match dist/updater.jar or target/updater-1.x-SNAPSHOT.jar
+java -classpath */updater*.jar Differ "$@"

@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <parent>
+    <groupId>com.codenfast</groupId>
+    <artifactId>updater</artifactId>
+    <version>1.0.0</version>
+  </parent>
+
+  <artifactId>updater-core</artifactId>
+  <packaging>jar</packaging>
+  <name>Updater Core</name>
+  <description>Core Updater functionality</description>
+
+  <dependencies>
+    <dependency>
+      <groupId>junit</groupId>
+      <artifactId>junit</artifactId>
+      <version>4.12</version>
+      <scope>test</scope>
+    </dependency>
+    <dependency>
+      <groupId>org.mockito</groupId>
+      <artifactId>mockito-core</artifactId>
+      <version>3.2.4</version>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <!-- By default, no host whitelist is added to the binary, so it can be used
+       to download and run applications from any server. To create a custom
+       Updater build that can only talk to whitelisted servers, set this
+       property on the command line, e.g. -Dupdater.host.whitelist=my.server.com
+       Wildcards can be used (*.mycompany.com) and multiple values can be
+       separated by commas (app1.foo.com,app2.bar.com,app3.baz.com). -->
+  <properties>
+    <updater.host.whitelist />
+  </properties>
+
+  <build>
+    <resources>
+      <resource> <!-- include the LICENSE file in the jar -->
+        <directory>..</directory>
+        <includes><include>LICENSE</include></includes>
+      </resource>
+    </resources>
+
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>1.5</version>
+        <executions>
+          <execution>
+            <id>add-test-source</id>
+            <phase>process-resources</phase>
+            <goals>
+              <goal>add-test-source</goal>
+            </goals>
+            <configuration>
+              <sources>
+                <source>src/it/java</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <artifactId>maven-antrun-plugin</artifactId>
+        <version>1.8</version>
+        <executions>
+          <execution>
+            <id>gen-build</id>
+            <phase>generate-sources</phase>
+            <configuration>
+              <target>
+                <tstamp>
+                  <format property="updater.build.time" pattern="yyyy-MM-dd HH:mm" />
+                </tstamp>
+                <copy file="${project.build.sourceDirectory}/com/codenfast/updater/data/Build.java.tmpl" tofile="${project.build.sourceDirectory}/com/codenfast/updater/data/Build.java" overwrite="true">
+                  <filterset>
+                    <filter token="build_time" value="${updater.build.time}" />
+                    <filter token="build_version" value="${project.version}" />
+                    <filter token="host_whitelist" value="${updater.host.whitelist}" />
+                  </filterset>
+                </copy>
+              </target>
+            </configuration>
+            <goals>
+              <goal>run</goal>
+            </goals>
+          </execution>
+        </executions>
+      </plugin>
+
+      <plugin>
+        <artifactId>maven-clean-plugin</artifactId>
+        <version>3.1.0</version>
+        <configuration>
+          <filesets>
+            <fileset>
+              <directory>${project.build.sourceDirectory}/</directory>
+              <includes>
+                <include>com/codenfast/updater/data/Build.java</include>
+              </includes>
+              <followSymlinks>false</followSymlinks>
+            </fileset>
+          </filesets>
+        </configuration>
+      </plugin>
+
+      <plugin>
+        <groupId>org.apache.maven.plugins</groupId>
+        <artifactId>maven-failsafe-plugin</artifactId>
+        <version>2.22.0</version>
+        <executions>
+          <execution>
+            <goals>
+              <goal>integration-test</goal>
+              <goal>verify</goal>
+            </goals>
+          </execution>
+        </executions>
+        <configuration>
+          <useFile>false</useFile>
+        </configuration>
+      </plugin>
+    </plugins>
+  </build>
+
+</project>
