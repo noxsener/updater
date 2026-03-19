@@ -4,7 +4,7 @@ import 'package:http/http.dart' as http;
 import '../models/root_context.dart';
 
 class ApiService {
-  static const String _jsonUrl = 'http://app.codenfast.com/wirecutterbot/files.json';
+  static const String _jsonUrl = 'http://app.codenfast.com/app/eimza2.json';
 
   Future<RootContext> fetchJsonConfig() async {
     final response = await http.get(Uri.parse(_jsonUrl));

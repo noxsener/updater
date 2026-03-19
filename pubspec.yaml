@@ -39,6 +39,7 @@ dependencies:
   process_run: ^1.2.4
   flutter_bloc: ^9.1.1
   google_fonts: ^6.3.0
+  msix: ^3.16.7
 
 dev_dependencies:
   flutter_test:
@@ -91,3 +92,15 @@ flutter:
   #
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
+msix_config:
+  display_name: D-Signer - Updater
+  publisher_display_name: Codenfast
+  publisher: CN=9095E18A-50C1-4E45-90A2-D2FA40455C72
+  identity_name: 5563Codenfast.WireCutter
+  msix_version: 1.0.0.0
+  protocol_activation: dsigner #protocol for applink
+  app_uri_handler_hosts: app.codenfast.com, codenfast.com
+  logo_path: D:\workspace-spring\wirecutter_client\assets\images\logo\wire-cutter-image.ico
+  capabilities: internetClientServer
+  certificate_path: D:\workspace-spring\wirecutter_server\wirecutter-windows.pfx
+  certificate_password: p1geonflyp10

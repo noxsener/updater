@@ -1,16 +1,36 @@
-# codenfast_updater
+### Scan current directory, write files.json
+./codenfast_updater --generate
 
-Codenfast Updater
+### With ignore patterns (repeatable flag)
+./codenfast_updater --generate --ignore "*.log" --ignore "build/"
 
-## Getting Started
+### Comma-separated patterns in one flag also work
+./codenfast_updater -g --ignore "*.log,build/,secrets/,*.tmp"
 
-This project is a starting point for a Flutter application.
+### Control where the JSON is written
+./codenfast_updater -g --output "dist/files.json"
 
-A few resources to get you started if this is your first Flutter project:
+### Set the base URL embedded in each file's `url` field
+./codenfast_updater -g --base-url "https://cdn.myserver.com/bot"
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+### Add runCommands for this OS
+./codenfast_updater -g --run "wirecutterbot.exe" --run "cleanup.bat"
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+### Override OS label (instead of auto-detecting)
+./codenfast_updater -g --os windows
+
+## Example
+```
+./codenfast_updater --generate --base-url "http://app.codenfast.com/eimza2"  --ignore "data/" --ignore "codenfast_updater" --run "./java-17-openjdk-amd64/bin/java -jar"
+```
+
+### Ignore pattern support (_IgnoreMatcher)
+
+| Pattern | What it ignores|
+| :--- | :----- |
+|*.log | Any file whose name ends in .log|
+|build/ or build | Any path segment named build|
+|src/gen/*.dart | Glob match on relative path|
+|**/temp | Any segment named temp at any depth|
+| secrets/key.pem | Exact relative path match|
+| Thumbs.db| Exact filename anywhere|
