@@ -94,13 +94,13 @@ class RootContext {
 // ─────────────────────────────────────────────────────────────────────────────
 
 Future<void> main(List<String> args) async {
-  // Check for --generate / -g anywhere in args
+  HttpOverrides.global = MyHttpOverrides();
+
   if (args.contains('--generate') || args.contains('-g')) {
     await _runGenerator(args);
     return;
   }
 
-  // Normal Flutter UI mode
   runApp(const MyApp());
 }
 
@@ -1178,4 +1178,12 @@ String _formatSize(int bytes) {
   if (bytes < 1024) return '${bytes} B';
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
   return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
+}
+
+class MyHttpOverrides extends HttpOverrides {
+  @override
+  HttpClient createHttpClient(SecurityContext? context) {
+    return super.createHttpClient(context)
+      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+  }
 }
