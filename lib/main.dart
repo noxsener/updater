@@ -3,7 +3,9 @@ import 'dart:io';
 import 'dart:math';
 
 import 'package:codenfast_updater/theme.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:process_run/shell.dart';
@@ -100,6 +102,22 @@ Future<void> main(List<String> args) async {
     await _runGenerator(args);
     return;
   }
+  WidgetsFlutterBinding.ensureInitialized();
+
+
+  ByteData letsEncryptR3 = await PlatformAssetBundle().load('assets/trusted-certs/lets-encrypt-r3.pem');
+  ByteData sectigoRSADomainValidationSecureServerCA = await PlatformAssetBundle().load('assets/trusted-certs/SectigoRSADomainValidationSecureServerCA.crt');
+  ByteData sectigoRSAExtendedValidationSecureServerCA = await PlatformAssetBundle().load('assets/trusted-certs/SectigoRSAExtendedValidationSecureServerCA.crt');
+  ByteData sectigoRSAOrganizationValidationSecureServerCA = await PlatformAssetBundle().load('assets/trusted-certs/SectigoRSAOrganizationValidationSecureServerCA.crt');
+
+  SecurityContext.defaultContext.setTrustedCertificatesBytes(letsEncryptR3.buffer.asUint8List());
+  SecurityContext.defaultContext.setTrustedCertificatesBytes(sectigoRSADomainValidationSecureServerCA.buffer.asUint8List());
+  SecurityContext.defaultContext.setTrustedCertificatesBytes(sectigoRSAExtendedValidationSecureServerCA.buffer.asUint8List());
+  SecurityContext.defaultContext.setTrustedCertificatesBytes(sectigoRSAOrganizationValidationSecureServerCA.buffer.asUint8List());
+
+  // LicenseRegistry.addLicense(() async* {
+  //   yield LicenseEntryWithLineBreaks(["Codenfast"], await rootBundle.loadString('assets/other/licence.txt'));
+  // });
 
   runApp(const MyApp());
 }
@@ -1175,7 +1193,7 @@ Future<void> _runGenerator(List<String> rawArgs) async {
 void _log(String msg) => stdout.writeln(msg);
 
 String _formatSize(int bytes) {
-  if (bytes < 1024) return '${bytes} B';
+  if (bytes < 1024) return '$bytes B';
   if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
   return '${(bytes / (1024 * 1024)).toStringAsFixed(2)} MB';
 }
