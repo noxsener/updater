@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
@@ -9,6 +10,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:process_run/shell.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA MODELS  (canonical copies also live in lib/models/ — keep in sync)
@@ -71,30 +73,6 @@ class RootContext {
 // ENTRY POINT
 // ─────────────────────────────────────────────────────────────────────────────
 
-// ─────────────────────────────────────────────────────────────────────────────
-// ENTRY POINT
-// Routes to CLI generator or Flutter UI based on args.
-//
-// Usage:
-//   Normal updater:
-//     ./codenfast_updater
-//
-//   Generate files.json (all files in current directory):
-//     ./codenfast_updater --generate
-//     ./codenfast_updater -g
-//
-//   Generate with ignore patterns (glob, path, or filename — repeatable):
-//     ./codenfast_updater --generate --ignore "*.log" --ignore "build/"
-//     ./codenfast_updater -g --ignore "*.log,build/,secrets/"
-//
-//   Extra flags:
-//     --output <path>      Where to write files.json  (default: ./files.json)
-//     --base-url <url>     Prepended to every file path in the url field
-//                          (default: http://app.codenfast.com/wirecutterbot)
-//     --run <cmd>          runCommands entry for this OS (repeatable)
-//     --os <name>          Override OS label  (default: auto-detect)
-// ─────────────────────────────────────────────────────────────────────────────
-
 Future<void> main(List<String> args) async {
   HttpOverrides.global = MyHttpOverrides();
 
@@ -104,20 +82,34 @@ Future<void> main(List<String> args) async {
   }
   WidgetsFlutterBinding.ensureInitialized();
 
+  ByteData letsEncryptR3 = await PlatformAssetBundle().load(
+    'assets/trusted-certs/lets-encrypt-r3.pem',
+  );
+  ByteData sectigoRSADomainValidationSecureServerCA =
+  await PlatformAssetBundle().load(
+    'assets/trusted-certs/SectigoRSADomainValidationSecureServerCA.crt',
+  );
+  ByteData sectigoRSAExtendedValidationSecureServerCA =
+  await PlatformAssetBundle().load(
+    'assets/trusted-certs/SectigoRSAExtendedValidationSecureServerCA.crt',
+  );
+  ByteData sectigoRSAOrganizationValidationSecureServerCA =
+  await PlatformAssetBundle().load(
+    'assets/trusted-certs/SectigoRSAOrganizationValidationSecureServerCA.crt',
+  );
 
-  ByteData letsEncryptR3 = await PlatformAssetBundle().load('assets/trusted-certs/lets-encrypt-r3.pem');
-  ByteData sectigoRSADomainValidationSecureServerCA = await PlatformAssetBundle().load('assets/trusted-certs/SectigoRSADomainValidationSecureServerCA.crt');
-  ByteData sectigoRSAExtendedValidationSecureServerCA = await PlatformAssetBundle().load('assets/trusted-certs/SectigoRSAExtendedValidationSecureServerCA.crt');
-  ByteData sectigoRSAOrganizationValidationSecureServerCA = await PlatformAssetBundle().load('assets/trusted-certs/SectigoRSAOrganizationValidationSecureServerCA.crt');
-
-  SecurityContext.defaultContext.setTrustedCertificatesBytes(letsEncryptR3.buffer.asUint8List());
-  SecurityContext.defaultContext.setTrustedCertificatesBytes(sectigoRSADomainValidationSecureServerCA.buffer.asUint8List());
-  SecurityContext.defaultContext.setTrustedCertificatesBytes(sectigoRSAExtendedValidationSecureServerCA.buffer.asUint8List());
-  SecurityContext.defaultContext.setTrustedCertificatesBytes(sectigoRSAOrganizationValidationSecureServerCA.buffer.asUint8List());
-
-  // LicenseRegistry.addLicense(() async* {
-  //   yield LicenseEntryWithLineBreaks(["Codenfast"], await rootBundle.loadString('assets/other/licence.txt'));
-  // });
+  SecurityContext.defaultContext.setTrustedCertificatesBytes(
+    letsEncryptR3.buffer.asUint8List(),
+  );
+  SecurityContext.defaultContext.setTrustedCertificatesBytes(
+    sectigoRSADomainValidationSecureServerCA.buffer.asUint8List(),
+  );
+  SecurityContext.defaultContext.setTrustedCertificatesBytes(
+    sectigoRSAExtendedValidationSecureServerCA.buffer.asUint8List(),
+  );
+  SecurityContext.defaultContext.setTrustedCertificatesBytes(
+    sectigoRSAOrganizationValidationSecureServerCA.buffer.asUint8List(),
+  );
 
   runApp(const MyApp());
 }
@@ -196,7 +188,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _statusMessage = 'Initializing...';
   double _progress = 0.0;
 
-  // ── URL — upgraded to https (FIX: was http://) ────────────────────────────
   static const String _jsonUrl = 'http://media.codenfast.com/eimza2/files.json';
 
   // ── Logo animation controllers ─────────────────────────────────────────────
@@ -211,6 +202,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   late final Animation<double> _logoPulse;
   late final Animation<double> _logoGlow;
   late final Animation<double> _scanLine;
+
+  // ── Logo rotation ──────────────────────────────────────────────────────────
+  int _logoIndex = 0;
+  Timer? _logoSwitchTimer;
+
+  static const List<String> _logoAssets = [
+    'assets/images/DeadLineLogo.png',
+    'assets/images/codenfast_logo_transparent_2688_1242.webp',
+  ];
 
   // ── Glitch text ────────────────────────────────────────────────────────────
   String _displayStatus = 'Initializing...';
@@ -238,27 +238,30 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 2000),
     )..repeat(reverse: true);
-    _logoPulse = Tween<double>(begin: 1.0, end: 1.04).animate(
-      CurvedAnimation(parent: _logoPulseCtrl, curve: Curves.easeInOut),
-    );
+    _logoPulse = Tween<double>(
+      begin: 1.0,
+      end: 1.04,
+    ).animate(CurvedAnimation(parent: _logoPulseCtrl, curve: Curves.easeInOut));
 
     // ── Cyan glow pulse (looping) ──────────────────────────────────────────
     _logoGlowCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1900),
     )..repeat(reverse: true);
-    _logoGlow = Tween<double>(begin: 0.3, end: 1.0).animate(
-      CurvedAnimation(parent: _logoGlowCtrl, curve: Curves.easeInOut),
-    );
+    _logoGlow = Tween<double>(
+      begin: 0.3,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _logoGlowCtrl, curve: Curves.easeInOut));
 
     // ── Horizontal scan line across logo (looping) ────────────────────────
     _scanCtrl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 2400),
     )..repeat();
-    _scanLine = Tween<double>(begin: -1.0, end: 1.0).animate(
-      CurvedAnimation(parent: _scanCtrl, curve: Curves.easeInOut),
-    );
+    _scanLine = Tween<double>(
+      begin: -1.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(parent: _scanCtrl, curve: Curves.easeInOut));
 
     // ── Progress bar shimmer ───────────────────────────────────────────────
     _progressShimmerCtrl = AnimationController(
@@ -266,9 +269,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       duration: const Duration(milliseconds: 1600),
     )..repeat();
 
-    // Play entrance, then start update process
+    // Play entrance, then start update process + logo rotation timer
     _logoFadeCtrl.forward().then((_) {
-      WidgetsBinding.instance.addPostFrameCallback((_) => _startUpdateProcess());
+      WidgetsBinding.instance.addPostFrameCallback(
+            (_) => _startUpdateProcess(),
+      );
+      // Switch logo every 4 seconds with a smooth cross-fade
+      _logoSwitchTimer = Timer.periodic(const Duration(seconds: 4), (_) {
+        if (mounted) {
+          setState(() {
+            _logoIndex = (_logoIndex + 1) % _logoAssets.length;
+          });
+        }
+      });
     });
   }
 
@@ -279,6 +292,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _logoGlowCtrl.dispose();
     _scanCtrl.dispose();
     _progressShimmerCtrl.dispose();
+    _logoSwitchTimer?.cancel();
     super.dispose();
   }
 
@@ -317,18 +331,19 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   // ── Error dialog ───────────────────────────────────────────────────────────
-  // FIX: was non-async / not awaited in old home_screen.dart
   Future<void> _showErrorDialog(String message) async {
     if (!mounted) return;
     return showDialog<void>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) => AlertDialog(
-        title: const Row(children: [
-          Icon(Icons.error_outline, color: Color(0xFFFF5370), size: 22),
-          SizedBox(width: 10),
-          Text('Update Error'),
-        ]),
+        title: const Row(
+          children: [
+            Icon(Icons.error_outline, color: Color(0xFFFF5370), size: 22),
+            SizedBox(width: 10),
+            Text('Update Error'),
+          ],
+        ),
         content: SingleChildScrollView(child: Text(message)),
         actions: [
           TextButton(
@@ -359,10 +374,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       final response = await http.get(Uri.parse(_jsonUrl));
       if (response.statusCode != 200) {
         throw Exception(
-            'Server returned ${response.statusCode} for configuration.');
+          'Server returned ${response.statusCode} for configuration.',
+        );
       }
       final config = RootContext.fromJson(
-          json.decode(response.body) as Map<String, dynamic>);
+        json.decode(response.body) as Map<String, dynamic>,
+      );
       final osFiles = config.osFileList.firstWhere(
             (f) => f.os == osType,
         orElse: () => throw Exception('No config found for OS: $osType'),
@@ -396,13 +413,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           final dl = await http.get(Uri.parse(entry.url));
           if (dl.statusCode != 200) {
             throw Exception(
-                'Failed to download ${entry.name} (HTTP ${dl.statusCode}).');
+              'Failed to download ${entry.name} (HTTP ${dl.statusCode}).',
+            );
           }
           await file.writeAsBytes(dl.bodyBytes);
-          // FIX: verify size after download to catch partial transfers
           if (await file.length() != entry.fileSize) {
-            throw Exception(
-                'Size mismatch for ${entry.name} after download.');
+            throw Exception('Size mismatch for ${entry.name} after download.');
           }
         }
 
@@ -422,7 +438,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final shell = Shell(workingDirectory: appDir.path);
         final commands = osFiles.runCommands;
         for (int i = 0; i < commands.length; i++) {
-          // FIX: last command (app launch) is fire-and-forget; others awaited
           if (i < commands.length - 1) {
             await shell.run(commands[i]);
           } else {
@@ -432,14 +447,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       }
 
-      // 5. Done — FIX: check mounted before exit
+      // 5. Done
       _setStatus('Update complete! Launching...', 1.0);
       await Future.delayed(const Duration(seconds: 2));
       if (mounted) exit(0);
     } catch (e) {
       if (mounted) {
         _setStatus('Error: ${e.toString()}', 0.0);
-        await _showErrorDialog(e.toString()); // FIX: now properly awaited
+        await _showErrorDialog(e.toString());
       }
     }
   }
@@ -452,25 +467,24 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Codenfast Updater'),
-      ),
+      appBar: AppBar(title: const Text('Codenfast Updater')),
       body: theme.getBody(
         Center(
           child: SingleChildScrollView(
-            padding:
-            const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
+            padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 32),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                // ── Animated logo ────────────────────────────────────────
+                // ── Animated logo with cross-fade switching ───────────────
                 _AnimatedLogo(
                   fadeOpacity: _logoOpacity,
                   scale: _logoScale,
                   pulse: _logoPulse,
                   glow: _logoGlow,
                   scanLine: _scanLine,
+                  logoAssets: _logoAssets,
+                  logoIndex: _logoIndex,
                 ),
                 const SizedBox(height: 40),
 
@@ -497,7 +511,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ANIMATED LOGO
+// ANIMATED LOGO  — fixed shape + cross-fade logo switching
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _AnimatedLogo extends StatelessWidget {
@@ -506,6 +520,8 @@ class _AnimatedLogo extends StatelessWidget {
   final Animation<double> pulse;
   final Animation<double> glow;
   final Animation<double> scanLine;
+  final List<String> logoAssets;
+  final int logoIndex;
 
   const _AnimatedLogo({
     required this.fadeOpacity,
@@ -513,6 +529,8 @@ class _AnimatedLogo extends StatelessWidget {
     required this.pulse,
     required this.glow,
     required this.scanLine,
+    required this.logoAssets,
+    required this.logoIndex,
   });
 
   @override
@@ -529,10 +547,10 @@ class _AnimatedLogo extends StatelessWidget {
               child: Stack(
                 alignment: Alignment.center,
                 children: [
-                  // Outer ambient glow
+                  // Outer ambient glow ring (circular, purely decorative)
                   Container(
-                    width: 220,
-                    height: 220,
+                    width: 260,
+                    height: 260,
                     decoration: BoxDecoration(
                       shape: BoxShape.circle,
                       boxShadow: [
@@ -546,12 +564,14 @@ class _AnimatedLogo extends StatelessWidget {
                     ),
                   ),
 
-                  // Logo circle with animated border
+                  // Logo card — rectangular with rounded corners
+                  // FIX: was BoxShape.circle with width≠height, which caused
+                  //      the circle to clip the wide logo image incorrectly.
                   Container(
-                    width: 400,
+                    width: 320,
                     height: 200,
                     decoration: BoxDecoration(
-                      shape: BoxShape.circle,
+                      borderRadius: BorderRadius.circular(24),
                       color: const Color(0xFF13161E),
                       border: Border.all(
                         color: Color.lerp(
@@ -570,31 +590,39 @@ class _AnimatedLogo extends StatelessWidget {
                         ),
                       ],
                     ),
-                    child: Stack(
-                      children: [
-                        // Logo image
-                        Center(
-                          child: Image.asset(
-                            'assets/images/DeadLineLogo.png',
-                            width: 400,
-                            height: 200,
-                            fit: BoxFit.fitWidth,
-                            errorBuilder: (_, __, ___) =>
-                            const _LogoFallback(),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(23),
+                      child: Stack(
+                        children: [
+                          // Cross-fade between all logo assets
+                          for (int i = 0; i < logoAssets.length; i++)
+                            AnimatedOpacity(
+                              opacity: i == logoIndex ? 1.0 : 0.0,
+                              duration: const Duration(milliseconds: 800),
+                              curve: Curves.easeInOut,
+                              child: Center(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(16),
+                                  child: Image.asset(
+                                    logoAssets[i],
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (_, __, ___) =>
+                                    const _LogoFallback(),
+                                  ),
+                                ),
+                              ),
+                            ),
+
+                          // Scan line overlay
+                          Positioned.fill(
+                            child: CustomPaint(
+                              painter: _ScanLinePainter(scanLine.value),
+                            ),
                           ),
-                        ),
-                        // Scan line overlay
-                        Positioned.fill(
-                          child: CustomPaint(
-                            painter: _ScanLinePainter(scanLine.value),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
-
-                  // HUD corner ticks
-                  // _CornerTicks(glow: glow.value),
                 ],
               ),
             );
@@ -621,11 +649,7 @@ class _ScanLinePainter extends CustomPainter {
       ..shader = LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: const [
-          Color(0x0000E5FF),
-          Color(0x4400E5FF),
-          Color(0x0000E5FF),
-        ],
+        colors: const [Color(0x0000E5FF), Color(0x4400E5FF), Color(0x0000E5FF)],
         stops: const [0, 0.5, 1],
       ).createShader(Rect.fromLTWH(0, y - 14, size.width, 28));
 
@@ -652,11 +676,7 @@ class _CornerTicks extends StatelessWidget {
       height: 228,
       child: CustomPaint(
         painter: _CornerTickPainter(
-          Color.lerp(
-            const Color(0x2200E5FF),
-            const Color(0xBB00E5FF),
-            glow,
-          )!,
+          Color.lerp(const Color(0x2200E5FF), const Color(0xBB00E5FF), glow)!,
         ),
       ),
     );
@@ -707,8 +727,11 @@ class _LogoFallback extends StatelessWidget {
       child: const Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.precision_manufacturing_outlined,
-              color: Color(0xFF00E5FF), size: 64),
+          Icon(
+            Icons.precision_manufacturing_outlined,
+            color: Color(0xFF00E5FF),
+            size: 64,
+          ),
           SizedBox(height: 8),
           Text(
             'Codenfast',
@@ -788,63 +811,64 @@ class _CyberProgressBar extends StatelessWidget {
             animation: shimmer,
             builder: (_, __) => SizedBox(
               height: 6,
-              child: Stack(children: [
-                // Track
-                Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF252C3D),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                ),
-
-                // Fill
-                FractionallySizedBox(
-                  widthFactor: progress.clamp(0.0, 1.0),
-                  child: Container(
+              child: Stack(
+                children: [
+                  // Track
+                  Container(
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          const Color(0xFF00B8CC),
-                          const Color(0xFF00E5FF),
-                          if (progress > 0.9) const Color(0xFF69FF47),
-                        ],
-                      ),
+                      color: const Color(0xFF252C3D),
                       borderRadius: BorderRadius.circular(3),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF00E5FF).withOpacity(0.5),
-                          blurRadius: 10,
-                        ),
-                      ],
                     ),
                   ),
-                ),
 
-                // Shimmer highlight on leading edge
-                if (progress > 0.01 && progress < 0.99)
+                  // Fill
                   FractionallySizedBox(
                     widthFactor: progress.clamp(0.0, 1.0),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: FractionallySizedBox(
-                        widthFactor: 0.12,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.white.withOpacity(0),
-                                Colors.white
-                                    .withOpacity(0.4 * shimmer.value),
-                                Colors.white.withOpacity(0),
-                              ],
+                    child: Container(
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF00B8CC),
+                            const Color(0xFF00E5FF),
+                            if (progress > 0.9) const Color(0xFF69FF47),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(3),
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF00E5FF).withOpacity(0.5),
+                            blurRadius: 10,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Shimmer highlight on leading edge
+                  if (progress > 0.01 && progress < 0.99)
+                    FractionallySizedBox(
+                      widthFactor: progress.clamp(0.0, 1.0),
+                      child: Align(
+                        alignment: Alignment.centerRight,
+                        child: FractionallySizedBox(
+                          widthFactor: 0.12,
+                          child: Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.white.withOpacity(0),
+                                  Colors.white.withOpacity(0.4 * shimmer.value),
+                                  Colors.white.withOpacity(0),
+                                ],
+                              ),
+                              borderRadius: BorderRadius.circular(3),
                             ),
-                            borderRadius: BorderRadius.circular(3),
                           ),
                         ),
                       ),
                     ),
-                  ),
-              ]),
+                ],
+              ),
             ),
           ),
         ],
@@ -854,7 +878,7 @@ class _CyberProgressBar extends StatelessWidget {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// URL STRIP  — placed below progress, well-visible, not intrusive
+// URL STRIP
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _UrlStrip extends StatelessWidget {
@@ -866,9 +890,25 @@ class _UrlStrip extends StatelessWidget {
       alignment: WrapAlignment.center,
       spacing: 12,
       runSpacing: 8,
-      children: const [
-        _UrlChip(label: 'codenfast.com', icon: Icons.language),
-        _UrlChip(label: 'app.codenfast.com', icon: Icons.cloud_outlined),
+      children: [
+        InkWell(
+          child: _UrlChip(
+            label: 'http://dsigner.com.tr',
+            icon: Icons.cloud_outlined,
+          ),
+          onTap: () async => launchUrl(Uri.parse('http://dsigner.com.tr')),
+        ),
+        InkWell(
+          child: _UrlChip(
+            label: 'http://deadline.tr',
+            icon: Icons.cloud_outlined,
+          ),
+          onTap: () async => launchUrl(Uri.parse('http://deadline.tr')),
+        ),
+        InkWell(
+          child: _UrlChip(label: 'http://codenfast.com', icon: Icons.language),
+          onTap: () async => launchUrl(Uri.parse('http://codenfast.com')),
+        ),
       ],
     );
   }
@@ -910,18 +950,14 @@ class _UrlChip extends StatelessWidget {
 
 // ═════════════════════════════════════════════════════════════════════════════
 // CLI GENERATOR
-// Invoked when --generate / -g is present in args.
-// Produces a files.json compatible with RootContext / OsFiles / FileEntry.
 // ═════════════════════════════════════════════════════════════════════════════
 
-// ─── Argument parser ──────────────────────────────────────────────────────────
-
 class _GeneratorArgs {
-  final List<String> ignorePatterns; // raw patterns from --ignore
-  final String outputPath;           // --output
-  final String baseUrl;              // --base-url
-  final List<String> runCommands;    // --run (repeatable)
-  final String? osOverride;          // --os
+  final List<String> ignorePatterns;
+  final String outputPath;
+  final String baseUrl;
+  final List<String> runCommands;
+  final String? osOverride;
 
   const _GeneratorArgs({
     required this.ignorePatterns,
@@ -940,40 +976,28 @@ class _GeneratorArgs {
 
     for (int i = 0; i < args.length; i++) {
       switch (args[i]) {
-      // --ignore "pattern"   or   --ignore "a,b,c"
         case '--ignore':
           if (i + 1 < args.length) {
             final raw = args[++i];
-            // Support comma-separated patterns in a single value
             ignorePatterns.addAll(
               raw.split(',').map((s) => s.trim()).where((s) => s.isNotEmpty),
             );
           }
           break;
-
-      // --output path/to/files.json
         case '--output':
           if (i + 1 < args.length) outputPath = args[++i];
           break;
-
-      // --base-url https://cdn.example.com/files
         case '--base-url':
           if (i + 1 < args.length) {
-            baseUrl = args[++i].replaceAll(RegExp(r'/$'), ''); // strip trailing /
+            baseUrl = args[++i].replaceAll(RegExp(r'/$'), '');
           }
           break;
-
-      // --run "myapp.exe --update"
         case '--run':
           if (i + 1 < args.length) runCommands.add(args[++i]);
           break;
-
-      // --os windows|linux|macos
         case '--os':
           if (i + 1 < args.length) osOverride = args[++i];
           break;
-
-      // Flags we intentionally skip (--generate, -g)
         case '--generate':
         case '-g':
           break;
@@ -990,15 +1014,6 @@ class _GeneratorArgs {
   }
 }
 
-// ─── Glob / pattern matcher ───────────────────────────────────────────────────
-//
-// Supports:
-//   *.log          → any file ending in .log  (filename match)
-//   build/         → any path segment named "build"
-//   **/temp        → any segment named "temp" at any depth
-//   secrets/key    → exact relative path prefix
-//   exact filename → exact name match
-
 class _IgnoreMatcher {
   final List<String> _patterns;
 
@@ -1007,55 +1022,37 @@ class _IgnoreMatcher {
 
   static String _normalise(String p) => p.replaceAll('\\', '/').trim();
 
-  /// Returns true if [relativePath] (forward-slash, relative to scan root)
-  /// matches any ignore pattern.
   bool matches(String relativePath) {
     final rel = relativePath.replaceAll('\\', '/');
     final name = rel.split('/').last;
 
     for (final pattern in _patterns) {
-      // 1. Directory segment shorthand:  "build/" or "build"
-      //    → match if any segment in the path equals the pattern (no wildcards)
       if (!pattern.contains('*') && !pattern.contains('?')) {
         final clean = pattern.replaceAll('/', '');
         if (rel.split('/').contains(clean)) return true;
-        // Exact relative-path prefix
         if (rel == pattern || rel.startsWith('$pattern/')) return true;
-        // Exact filename
         if (name == pattern) return true;
         continue;
       }
-
-      // 2. **/<name>  → match the segment anywhere in the path
       if (pattern.startsWith('**/')) {
         final suffix = pattern.substring(3);
         if (_globMatch(suffix, name)) return true;
-        // Could also match any sub-path suffix
         for (final segment in rel.split('/')) {
           if (_globMatch(suffix, segment)) return true;
         }
         continue;
       }
-
-      // 3. Simple glob (no directory separator)  e.g. "*.log", "tmp_*"
       if (!pattern.contains('/')) {
         if (_globMatch(pattern, name)) return true;
         continue;
       }
-
-      // 4. Path glob with slashes  e.g. "src/gen/*.dart"
       if (_globMatch(pattern, rel)) return true;
     }
-
     return false;
   }
 
-  /// Minimal glob: supports * (any chars except /) and ? (one char except /)
   static bool _globMatch(String pattern, String input) {
-    // Convert glob to regex
-    final regexStr = pattern
-        .split('')
-        .map((c) {
+    final regexStr = pattern.split('').map((c) {
       switch (c) {
         case '*':
           return '[^/]*';
@@ -1068,13 +1065,10 @@ class _IgnoreMatcher {
         default:
           return RegExp.escape(c);
       }
-    })
-        .join();
+    }).join();
     return RegExp('^$regexStr\$').hasMatch(input);
   }
 }
-
-// ─── OS detection (CLI-safe, no Platform.is* import needed) ──────────────────
 
 String _detectOs() {
   if (Platform.isWindows) return 'windows';
@@ -1082,8 +1076,6 @@ String _detectOs() {
   if (Platform.isMacOS) return 'macos';
   return 'unknown';
 }
-
-// ─── Generator entry point ────────────────────────────────────────────────────
 
 Future<void> _runGenerator(List<String> rawArgs) async {
   final args = _GeneratorArgs.parse(rawArgs);
@@ -1108,7 +1100,6 @@ Future<void> _runGenerator(List<String> rawArgs) async {
   }
   _log('');
 
-  // ── Scan files ─────────────────────────────────────────────────────────────
   final fileEntries = <Map<String, dynamic>>[];
   int scanned = 0;
   int ignored = 0;
@@ -1116,12 +1107,10 @@ Future<void> _runGenerator(List<String> rawArgs) async {
   await for (final entity in root.list(recursive: true, followLinks: false)) {
     if (entity is! File) continue;
 
-    // Compute path relative to root (forward-slash, no leading ./)
     final rel = entity.path
         .replaceAll('\\', '/')
         .replaceFirst('${root.path.replaceAll('\\', '/')}/', '');
 
-    // Always ignore the output file itself to avoid self-referential loops
     if (rel == args.outputPath.replaceAll('\\', '/')) {
       ignored++;
       continue;
@@ -1136,16 +1125,13 @@ Future<void> _runGenerator(List<String> rawArgs) async {
     final stat = await entity.stat();
     final fileSize = stat.size;
 
-    // The "path" field in the JSON is the directory portion (empty string = root)
     final segments = rel.split('/');
     final name = segments.last;
     final dir = segments.length > 1
         ? segments.sublist(0, segments.length - 1).join('/')
         : '';
 
-    // URL = baseUrl / relative/path/to/file
-    final urlPath = rel; // keep forward slashes
-    final url = '${args.baseUrl}/$urlPath';
+    final url = '${args.baseUrl}/$rel';
 
     fileEntries.add({
       'name': name,
@@ -1163,20 +1149,13 @@ Future<void> _runGenerator(List<String> rawArgs) async {
   _log('  Ignored : $ignored file(s)');
   _log('');
 
-  // ── Build RootContext JSON ─────────────────────────────────────────────────
   final rootContextJson = {
     'osFileList': [
-      {
-        'os': osLabel,
-        'fileList': fileEntries,
-        'runCommands': args.runCommands,
-      },
+      {'os': osLabel, 'fileList': fileEntries, 'runCommands': args.runCommands},
     ],
   };
 
-  // ── Write output ───────────────────────────────────────────────────────────
   final outFile = File(args.outputPath);
-  // Create parent directories if needed
   final parent = outFile.parent;
   if (!await parent.exists()) await parent.create(recursive: true);
 
@@ -1187,8 +1166,6 @@ Future<void> _runGenerator(List<String> rawArgs) async {
   _log('');
   exit(0);
 }
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 void _log(String msg) => stdout.writeln(msg);
 
@@ -1202,6 +1179,7 @@ class MyHttpOverrides extends HttpOverrides {
   @override
   HttpClient createHttpClient(SecurityContext? context) {
     return super.createHttpClient(context)
-      ..badCertificateCallback = (X509Certificate cert, String host, int port) => true;
+      ..badCertificateCallback =
+          (X509Certificate cert, String host, int port) => true;
   }
 }
