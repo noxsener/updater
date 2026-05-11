@@ -575,7 +575,7 @@ class _AnimatedLogo extends StatelessWidget {
                         // Logo image
                         Center(
                           child: Image.asset(
-                            'assets/images/codenfast_logo_transparent_2688_1242.webp',
+                            'assets/images/DeadLineLogo.png',
                             width: 400,
                             height: 200,
                             fit: BoxFit.fitWidth,
