@@ -133,7 +133,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return MaterialApp(
-      title: 'Codenfast Updater',
+      title: 'DSigner EImza Updater',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
