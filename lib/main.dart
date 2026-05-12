@@ -188,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _statusMessage = 'Initializing...';
   double _progress = 0.0;
 
-  static const String _jsonUrl = 'http://media.codenfast.com/eimza2/files.json';
+  static const String _jsonUrl = 'http://dsigner.com.tr/eimza2/files.json';
 
   // ── Logo animation controllers ─────────────────────────────────────────────
   late final AnimationController _logoFadeCtrl;
