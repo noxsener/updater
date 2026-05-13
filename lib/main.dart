@@ -3,12 +3,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 
-import 'package:codenfast_updater/theme.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:meditek_signer_updater/theme.dart';
 import 'package:process_run/shell.dart';
 import 'package:url_launcher/url_launcher.dart';
 
