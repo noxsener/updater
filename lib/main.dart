@@ -125,7 +125,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return MaterialApp(
-      title: 'DSigner EImza Updater',
+      title: 'Meditek Signer Güncelleyici',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -188,7 +188,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _statusMessage = 'Initializing...';
   double _progress = 0.0;
 
-  static const String _jsonUrl = 'http://dsigner.com.tr/eimza2/files.json';
+  static const String _jsonUrl = 'http://udei.meditek.net/files.json';
 
   // ── Logo animation controllers ─────────────────────────────────────────────
   late final AnimationController _logoFadeCtrl;
@@ -208,8 +208,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _logoSwitchTimer;
 
   static const List<String> _logoAssets = [
-    'assets/images/DeadLineLogo.png',
-    'assets/images/codenfast_logo_transparent_2688_1242.webp',
+    'assets/images/meditek_signer_446x278.png',
   ];
 
   // ── Glitch text ────────────────────────────────────────────────────────────
@@ -467,7 +466,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return Scaffold(
-      appBar: AppBar(title: const Text('Codenfast Updater')),
+      appBar: AppBar(title: const Text('Meditek Signer Güncelleyici')),
       body: theme.getBody(
         Center(
           child: SingleChildScrollView(
@@ -734,7 +733,7 @@ class _LogoFallback extends StatelessWidget {
           ),
           SizedBox(height: 8),
           Text(
-            'Codenfast',
+            'Meditek',
             style: TextStyle(
               color: Color(0xFF00E5FF),
               fontSize: 11,
@@ -893,21 +892,10 @@ class _UrlStrip extends StatelessWidget {
       children: [
         InkWell(
           child: _UrlChip(
-            label: 'http://dsigner.com.tr',
+            label: 'meditek.tr',
             icon: Icons.cloud_outlined,
           ),
-          onTap: () async => launchUrl(Uri.parse('http://dsigner.com.tr')),
-        ),
-        InkWell(
-          child: _UrlChip(
-            label: 'http://deadline.tr',
-            icon: Icons.cloud_outlined,
-          ),
-          onTap: () async => launchUrl(Uri.parse('http://deadline.tr')),
-        ),
-        InkWell(
-          child: _UrlChip(label: 'http://codenfast.com', icon: Icons.language),
-          onTap: () async => launchUrl(Uri.parse('http://codenfast.com')),
+          onTap: () async => launchUrl(Uri.parse('http://meditek.tr/')),
         ),
       ],
     );
@@ -970,7 +958,7 @@ class _GeneratorArgs {
   factory _GeneratorArgs.parse(List<String> args) {
     final ignorePatterns = <String>[];
     var outputPath = 'files.json';
-    var baseUrl = 'http://app.codenfast.com/app';
+    var baseUrl = 'http://udei.meditek.net';
     final runCommands = <String>[];
     String? osOverride;
 

@@ -194,73 +194,6 @@ class CodenfastTheme {
         ]));
   }
 
-  /*
-  TextTheme textTheme2 = TextTheme(
-    displayLarge: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 26,
-            fontWeight: FontWeight.bold)),
-    displayMedium: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 24,
-            fontWeight: FontWeight.bold)),
-    displaySmall: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 22,
-            fontWeight: FontWeight.bold)),
-    headlineLarge: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 24,
-            fontWeight: FontWeight.bold)),
-    headlineMedium: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 22,
-            fontWeight: FontWeight.bold)),
-    headlineSmall: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold)),
-    titleLarge: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 24,
-            fontWeight: FontWeight.bold)),
-    titleMedium: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold)),
-    titleSmall: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 20,
-            fontWeight: FontWeight.bold)),
-    labelLarge: GoogleFonts.roboto(
-        textStyle: const TextStyle(color: Colors.black, fontSize: 16)),
-    labelMedium: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 14,
-            fontWeight: FontWeight.bold)),
-    labelSmall: GoogleFonts.roboto(
-        textStyle: const TextStyle(
-            color: Colors.black,
-            fontSize: 12,
-            fontWeight: FontWeight.bold)),
-    bodyLarge: GoogleFonts.roboto(
-        textStyle: const TextStyle(color: Colors.black, fontSize: 16)),
-    bodyMedium: GoogleFonts.roboto(
-        textStyle: const TextStyle(color: Colors.black, fontSize: 14)),
-    bodySmall: GoogleFonts.roboto(
-        textStyle: const TextStyle(color: Colors.black, fontSize: 12)),
-  );
-*/
   IconThemeData iconTheme() {
     return const IconThemeData(color: Colors.white, shadows: [
     ]);
@@ -337,13 +270,6 @@ class CodenfastTheme {
       ),
     );
   }
-
-  /*
-  IconThemeData iconTheme2 = const IconThemeData(color: Colors.black, shadows: [
-    BoxShadow(color: Colors.white, offset: Offset(0, 0), blurRadius: 4)
-  ]);
-*/
-
 
   Widget circleAvatar(ImageProvider imageProvider, double size) {
     return CircleAvatar(
