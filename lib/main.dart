@@ -125,7 +125,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return MaterialApp(
-      title: 'DSigner EImza Updater',
+      title: 'Falcon Eİmza Güncelleyici',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -208,8 +208,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _logoSwitchTimer;
 
   static const List<String> _logoAssets = [
-    'assets/images/DeadLineLogo.png',
-    'assets/images/codenfast_logo_transparent_2688_1242.webp',
+    'assets/images/falcon_logo.jpeg',
   ];
 
   // ── Glitch text ────────────────────────────────────────────────────────────
@@ -467,7 +466,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return Scaffold(
-      appBar: AppBar(title: const Text('Codenfast Updater')),
+      // appBar: AppBar(title: const Text('Falcon Eimza Güncelleyici')),
       body: theme.getBody(
         Center(
           child: SingleChildScrollView(
@@ -734,7 +733,7 @@ class _LogoFallback extends StatelessWidget {
           ),
           SizedBox(height: 8),
           Text(
-            'Codenfast',
+            'Falcon Bilişim',
             style: TextStyle(
               color: Color(0xFF00E5FF),
               fontSize: 11,
@@ -970,7 +969,7 @@ class _GeneratorArgs {
   factory _GeneratorArgs.parse(List<String> args) {
     final ignorePatterns = <String>[];
     var outputPath = 'files.json';
-    var baseUrl = 'http://app.codenfast.com/app';
+    var baseUrl = 'http://www.isosis.net/isosis/';
     final runCommands = <String>[];
     String? osOverride;
 
