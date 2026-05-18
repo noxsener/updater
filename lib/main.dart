@@ -892,21 +892,17 @@ class _UrlStrip extends StatelessWidget {
       children: [
         InkWell(
           child: _UrlChip(
-            label: 'http://dsigner.com.tr',
+            label: 'http://falkonbilisim.com',
             icon: Icons.cloud_outlined,
           ),
-          onTap: () async => launchUrl(Uri.parse('http://dsigner.com.tr')),
+          onTap: () async => launchUrl(Uri.parse('http://falkonbilisim.com')),
         ),
         InkWell(
           child: _UrlChip(
-            label: 'http://deadline.tr',
+            label: 'http://revirotomasyon.com',
             icon: Icons.cloud_outlined,
           ),
-          onTap: () async => launchUrl(Uri.parse('http://deadline.tr')),
-        ),
-        InkWell(
-          child: _UrlChip(label: 'http://codenfast.com', icon: Icons.language),
-          onTap: () async => launchUrl(Uri.parse('http://codenfast.com')),
+          onTap: () async => launchUrl(Uri.parse('http://revirotomasyon.com')),
         ),
       ],
     );
