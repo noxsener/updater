@@ -39,12 +39,13 @@ static void my_application_activate(GApplication* application) {
 #endif
   if (use_header_bar) {
     GtkHeaderBar* header_bar = GTK_HEADER_BAR(gtk_header_bar_new());
+    gtk_window_set_icon_from_file(GTK_WINDOW(window),"assets/images/Icon_1024x1024.ico",NULL);
     gtk_widget_show(GTK_WIDGET(header_bar));
-    gtk_header_bar_set_title(header_bar, "codenfast_updater");
+    gtk_header_bar_set_title(header_bar, "Codenfast Guncelleyici");
     gtk_header_bar_set_show_close_button(header_bar, TRUE);
     gtk_window_set_titlebar(window, GTK_WIDGET(header_bar));
   } else {
-    gtk_window_set_title(window, "codenfast_updater");
+    gtk_window_set_title(window, "Codenfast Guncelleyici");
   }
 
   gtk_window_set_default_size(window, 1280, 720);
