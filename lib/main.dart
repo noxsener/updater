@@ -467,7 +467,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return Scaffold(
-      appBar: AppBar(title: const Text('Codenfast Updater')),
+      // appBar: AppBar(title: const Text('Codenfast Updater')),
       body: theme.getBody(
         Center(
           child: SingleChildScrollView(
