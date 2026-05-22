@@ -537,6 +537,10 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   _FileProgressBar(
                     progress: _fileProgress,
                   ),
+                if (_fileProgress <= 0 || _fileProgress >= 1.0)
+                  _FileProgressBar(
+                    progress: 100,
+                  ),
                 const SizedBox(height: 24),
 
                 // ── URL chips ────────────────────────────────────────────
