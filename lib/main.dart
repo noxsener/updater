@@ -438,10 +438,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             await sink.close();
 
           } catch (e) {
-            await sink.close(); // Hata durumunda dosyayı kapat
+
             _setStatus('Download failed: ${entry.name}', 0.0);
             rethrow;
           } finally {
+            await sink.close(); // Hata durumunda dosyayı kapat
             client.close();
           }
 
