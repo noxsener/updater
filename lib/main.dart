@@ -188,6 +188,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   String _statusMessage = 'Initializing...';
   double _progress = 0.0;
 
+  double _fileProgress = 0.0; // Mevcut dosyanın indirme oranı (0.0 - 1.0)
+  String _currentFileName = ''; // İndirilen dosyanın adı
+
   static const String _jsonUrl = 'http://dsigner.com.tr/eimza2/files.json';
 
   // ── Logo animation controllers ─────────────────────────────────────────────
@@ -406,27 +409,55 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
 
         if (downloadRequired) {
-          _setStatus(
-            'Downloading: ${entry.name}',
-            0.10 + 0.80 * (filesProcessed / total),
-          );
-          final dl = await http.get(Uri.parse(entry.url));
-          if (dl.statusCode != 200) {
-            throw Exception(
-              'Failed to download ${entry.name} (HTTP ${dl.statusCode}).',
-            );
+          _setStatus('Downloading: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
+
+          final client = http.Client();
+          final sink = file.openWrite(); // Dosyayı yazmak için aç
+
+          try {
+            final request = http.Request('GET', Uri.parse(entry.url));
+            final response = await client.send(request);
+
+            final totalBytes = response.contentLength ?? entry.fileSize;
+            int receivedBytes = 0;
+
+            // 'listen' yerine 'await for' kullanarak akışı daha güvenli yönetiyoruz
+            await for (final List<int> chunk in response.stream) {
+              receivedBytes += chunk.length;
+              sink.add(chunk); // Veriyi sink'e ekle
+
+              if (mounted) {
+                setState(() {
+                  _fileProgress = receivedBytes / (totalBytes > 0 ? totalBytes : 1);
+                });
+              }
+            }
+
+            // ÖNEMLİ: Stream bittikten sonra sink'in tamamen boşaltılıp kapatılmasını bekle
+            await sink.flush();
+            await sink.close();
+
+          } catch (e) {
+            await sink.close(); // Hata durumunda dosyayı kapat
+            _setStatus('Download failed: ${entry.name}', 0.0);
+            rethrow;
+          } finally {
+            client.close();
           }
-          await file.writeAsBytes(dl.bodyBytes);
-          if (await file.length() != entry.fileSize) {
-            throw Exception('Size mismatch for ${entry.name} after download.');
+
+          // Artık dosya kapandı, boyut kontrolü yapabiliriz
+          final finalLength = await file.length();
+          if (finalLength != entry.fileSize) {
+            throw Exception(
+                'Size mismatch for ${entry.name}. Expected: ${entry.fileSize}, Got: $finalLength'
+            );
           }
         }
 
         filesProcessed++;
+        setState(() => _fileProgress = 0.0); // Dosya bitince barı sıfırla
         _setStatus(
-          downloadRequired
-              ? '↓ ${entry.name} downloaded.'
-              : '✓ ${entry.name} up to date.',
+          downloadRequired ? '↓ ${entry.name} downloaded.' : '✓ ${entry.name} up to date.',
           0.10 + 0.80 * (filesProcessed / total),
         );
       }
@@ -494,9 +525,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                 // ── Themed progress bar ──────────────────────────────────
                 _CyberProgressBar(
+                  label: 'TOTAL PROGRESS',
                   progress: _progress,
                   shimmer: _progressShimmerCtrl,
                 ),
+                const SizedBox(height: 16),
+
+// ── Dosya Bazlı Progress (Yeni eklenen) ──
+                if (_fileProgress > 0 && _fileProgress < 1.0)
+                  _FileProgressBar(
+                    progress: _fileProgress,
+                  ),
                 const SizedBox(height: 24),
 
                 // ── URL chips ────────────────────────────────────────────
@@ -775,15 +814,48 @@ class _GlitchStatusText extends StatelessWidget {
   }
 }
 
+class _FileProgressBar extends StatelessWidget {
+  final double progress;
+
+  const _FileProgressBar({required this.progress});
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'File Download: ${(progress * 100).toInt()}%',
+          style: GoogleFonts.robotoMono(
+            color: Colors.white70,
+            fontSize: 10,
+          ),
+        ),
+        const SizedBox(height: 4),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(2),
+          child: LinearProgressIndicator(
+            value: progress,
+            minHeight: 3,
+            backgroundColor: Colors.white10,
+            valueColor: const AlwaysStoppedAnimation<Color>(Colors.amberAccent),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
 // CYBER PROGRESS BAR
 // ─────────────────────────────────────────────────────────────────────────────
 
 class _CyberProgressBar extends StatelessWidget {
+  final String label;
   final double progress;
   final AnimationController shimmer;
 
-  const _CyberProgressBar({required this.progress, required this.shimmer});
+  const _CyberProgressBar({required this.progress, required this.shimmer, required this.label});
 
   @override
   Widget build(BuildContext context) {
