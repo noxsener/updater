@@ -826,7 +826,7 @@ class _FileProgressBar extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'File Download: ${(progress * 100).toInt()}%',
+          'File Download: ${(progress * 100).toStringAsFixed(2)}%',
           style: GoogleFonts.robotoMono(
             color: Colors.white70,
             fontSize: 10,
