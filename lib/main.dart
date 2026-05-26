@@ -466,7 +466,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return Scaffold(
-      appBar: AppBar(title: const Text('Meditek Signer Güncelleyici')),
+      // appBar: AppBar(title: const Text('Meditek Signer Güncelleyici')),
       body: theme.getBody(
         Center(
           child: SingleChildScrollView(
