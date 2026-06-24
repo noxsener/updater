@@ -191,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   double _fileProgress = 0.0; // Mevcut dosyanın indirme oranı (0.0 - 1.0)
   String _currentFileName = ''; // İndirilen dosyanın adı
 
-  static const String _jsonUrl = 'http://dsigner.com.tr/eimza2/files.json';
+  static const String _jsonUrl = 'http://media.codenfast.com/eimza2/files.json';
 
   // ── Logo animation controllers ─────────────────────────────────────────────
   late final AnimationController _logoFadeCtrl;
