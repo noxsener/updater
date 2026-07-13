@@ -63,17 +63,18 @@ class FileService {
       }
 
       onProgress('All files processed.', 1.0);
-      await _executeRunCommands(osFiles.runCommands);
+      await _executeRunCommands(osFiles.runCommands, appDir.path);
       onProgress('Application launched!', 1.0);
     } catch (e) {
       onProgress('Error: ${e.toString()}', 0.0);
     }
   }
 
-  Future<void> _executeRunCommands(List<String> commands) async {
-    var shell = Shell();
+  Future<void> _executeRunCommands(List<String> commands, String workingDirectory) async {
+    var shell = Shell(workingDirectory: workingDirectory);
     for (final command in commands) {
-      await shell.run(command);
+      final sanitized = command.replaceFirst(RegExp(r'^sudo\s+'), '');
+      await shell.run(sanitized);
     }
   }
 }

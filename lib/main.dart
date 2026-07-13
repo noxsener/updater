@@ -470,11 +470,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final shell = Shell(workingDirectory: appDir.path);
         final commands = osFiles.runCommands;
         for (int i = 0; i < commands.length; i++) {
+          final cmd = commands[i].replaceFirst(RegExp(r'^sudo\s+'), '');
           if (i < commands.length - 1) {
-            await shell.run(commands[i]);
+            await shell.run(cmd);
           } else {
             // ignore: unawaited_futures
-            shell.run(commands[i]);
+            shell.run(cmd);
           }
         }
       }
