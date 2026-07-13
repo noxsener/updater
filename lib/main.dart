@@ -191,7 +191,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   double _fileProgress = 0.0; // Mevcut dosyanın indirme oranı (0.0 - 1.0)
   String _currentFileName = ''; // İndirilen dosyanın adı
 
-  static const String _jsonUrl = 'http://media.codenfast.com/eimza2/files.json';
+  static const String _jsonUrl = 'https://dsigner.com.tr/eimza2/files.json';
 
   // ── Logo animation controllers ─────────────────────────────────────────────
   late final AnimationController _logoFadeCtrl;
@@ -361,6 +361,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
+  // Returns the directory where files should be written.
+  // On macOS .app bundles, Directory.current is "/" when launched from Finder,
+  // so we derive the path from the executable location instead.
+  Directory _resolveAppDir() {
+    final exe = File(Platform.resolvedExecutable);
+    var dir = exe.parent;
+    // Inside a .app bundle the executable lives at Foo.app/Contents/MacOS/Foo.
+    // Walk up to the folder that *contains* the .app so files land beside it.
+    if (dir.path.contains('.app/Contents/MacOS')) {
+      return dir.parent.parent.parent;
+    }
+    return dir;
+  }
+
   // ── Core update logic ──────────────────────────────────────────────────────
   Future<void> _startUpdateProcess() async {
     try {
@@ -390,10 +404,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _setStatus('Configuration loaded.', 0.10);
 
       // 3. Process files
-      final appDir = Directory.current;
+      final appDir = _resolveAppDir();
       int filesProcessed = 0;
       final total = osFiles.fileList.length;
+      final client = http.Client();
 
+      try {
       for (final entry in osFiles.fileList) {
         final localDir = Directory('${appDir.path}/${entry.path}');
         if (!await localDir.exists()) {
@@ -411,8 +427,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         if (downloadRequired) {
           _setStatus('Downloading: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
 
-          final client = http.Client();
-          final sink = file.openWrite(); // Dosyayı yazmak için aç
+          final sink = file.openWrite();
 
           try {
             final request = http.Request('GET', Uri.parse(entry.url));
@@ -421,10 +436,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             final totalBytes = response.contentLength ?? entry.fileSize;
             int receivedBytes = 0;
 
-            // 'listen' yerine 'await for' kullanarak akışı daha güvenli yönetiyoruz
             await for (final List<int> chunk in response.stream) {
               receivedBytes += chunk.length;
-              sink.add(chunk); // Veriyi sink'e ekle
+              sink.add(chunk);
 
               if (mounted) {
                 setState(() {
@@ -433,20 +447,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               }
             }
 
-            // ÖNEMLİ: Stream bittikten sonra sink'in tamamen boşaltılıp kapatılmasını bekle
             await sink.flush();
-            await sink.close();
-
           } catch (e) {
-
             _setStatus('Download failed: ${entry.name}', 0.0);
             rethrow;
           } finally {
-            await sink.close(); // Hata durumunda dosyayı kapat
-            client.close();
+            await sink.close();
           }
 
-          // Artık dosya kapandı, boyut kontrolü yapabiliriz
           final finalLength = await file.length();
           if (finalLength != entry.fileSize) {
             throw Exception(
@@ -461,6 +469,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           downloadRequired ? '↓ ${entry.name} downloaded.' : '✓ ${entry.name} up to date.',
           0.10 + 0.80 * (filesProcessed / total),
         );
+      }
+      } finally {
+        client.close();
       }
 
       // 4. Run post-update commands
