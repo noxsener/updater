@@ -210,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   double _fileProgress = 0.0;
   String _logFilePath = '';
 
-  static const String _jsonUrl = 'http://media.codenfast.com/eimza2/files.json';
+  static const String _jsonUrl = 'https://dsigner.com.tr/eimza2/files.json';
 
   IOSink? _logSink;
 
@@ -581,8 +581,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             _writeLog('Quarantine kaldırıldı: $filePath');
           }
 
-          // Shell script: çalıştırma izni ver
-          if ((Platform.isMacOS || Platform.isLinux) && entry.name.endsWith('.sh')) {
+          // Shell script veya bin/ içindeki dosyalara çalıştırma izni ver
+          final inBinDir = entry.path.split('/').contains('bin') ||
+              entry.path.split('\\').contains('bin');
+          if ((Platform.isMacOS || Platform.isLinux) &&
+              (entry.name.endsWith('.sh') || inBinDir)) {
             await Process.run('chmod', ['+x', filePath]);
             _writeLog('chmod +x: $filePath');
           }
@@ -642,7 +645,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return Scaffold(
-      // appBar: AppBar(title: const Text('Codenfast Updater')),
+      // appBar: AppBar(title: const Text('DSigner Updater')),
       body: theme.getBody(
         Center(
           child: SingleChildScrollView(
@@ -961,7 +964,7 @@ class _LogoFallback extends StatelessWidget {
           ),
           SizedBox(height: 8),
           Text(
-            'Codenfast',
+            'DSigner',
             style: TextStyle(
               color: Color(0xFF00E5FF),
               fontSize: 11,
@@ -1345,7 +1348,7 @@ Future<void> _runGenerator(List<String> rawArgs) async {
 
   _log('');
   _log('╔══════════════════════════════════════════════╗');
-  _log('║   Codenfast Updater — JSON Generator         ║');
+  _log('║   DSigner Updater — JSON Generator           ║');
   _log('╚══════════════════════════════════════════════╝');
   _log('');
   _log('  Root dir : ${root.path}');
