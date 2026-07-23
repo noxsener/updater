@@ -58,9 +58,9 @@ const _jvmArgs = [
 ];
 
 const _launchConfigs = <String, LaunchConfig>{
-  'macos':   LaunchConfig(executable: 'jdk*/Contents/Home/bin/java', args: _jvmArgs),
-  'linux':   LaunchConfig(executable: 'jdk*/bin/java',               args: _jvmArgs),
-  'windows': LaunchConfig(executable: r'jdk*\bin\java.exe',          args: _jvmArgs),
+  'macos':   LaunchConfig(executable: 'jdk-17.0.19.jdk/Contents/Home/bin/java', args: _jvmArgs),
+  'linux':   LaunchConfig(executable: 'java-17-openjdk-amd64/bin/java',         args: _jvmArgs),
+  'windows': LaunchConfig(executable: r'jdk-17.0.16\bin\java.exe',              args: _jvmArgs),
 };
 
 class OsFiles {
@@ -378,7 +378,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // ── Config-based launcher ─────────────────────────────────────────────────
   Future<void> _launchFromConfig(LaunchConfig config, Directory workDir) async {
-    final exePath = await _resolveExecutable(config.executable, workDir);
+    final exePath = '${workDir.path}${Platform.pathSeparator}'
+        '${config.executable.replaceAll('/', Platform.pathSeparator).replaceAll('\\', Platform.pathSeparator)}';
 
     if (!await File(exePath).exists()) {
       throw Exception('Çalıştırılabilir dosya bulunamadı: $exePath');
@@ -394,39 +395,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       mode: ProcessStartMode.detached,
     );
     _writeLog('Uygulama başlatıldı.');
-  }
-
-  Future<String> _resolveExecutable(String pattern, Directory workDir) async {
-    final parts = pattern.replaceAll('\\', '/').split('/');
-    String current = workDir.path;
-
-    for (final part in parts) {
-      if (part.contains('*')) {
-        final dir = Directory(current);
-        String? matched;
-        await for (final entity in dir.list()) {
-          final name = entity.path.split(Platform.pathSeparator).last;
-          if (_globSimple(part, name)) {
-            matched = entity.path;
-            break;
-          }
-        }
-        if (matched == null) {
-          throw Exception('"$part" ile eşleşen dosya/dizin bulunamadı ($current)');
-        }
-        current = matched;
-      } else {
-        current = '$current${Platform.pathSeparator}$part';
-      }
-    }
-    return current;
-  }
-
-  bool _globSimple(String pattern, String name) {
-    final regex = RegExp(
-      '^${pattern.split('*').map(RegExp.escape).join('.*')}\$',
-    );
-    return regex.hasMatch(name);
   }
 
   // ── Status helper with glitch effect ──────────────────────────────────────
@@ -623,6 +591,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           if (entry.name.endsWith('.zip')) {
             _setStatus('Açılıyor: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
             await _extractZip(filePath, localDir.path);
+            // unzip strips execute bits on macOS/Linux — restore them for bin/ files
+            if (Platform.isMacOS || Platform.isLinux) {
+              await Process.run('find', [localDir.path, '-path', '*/bin/*', '-type', 'f', '-exec', 'chmod', '+x', '{}', '+']);
+              _writeLog('chmod +x bin files in: ${localDir.path}');
+            }
           }
         }
 
