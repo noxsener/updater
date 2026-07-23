@@ -9,6 +9,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import 'package:process_run/shell.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -187,11 +188,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // ── Update state ───────────────────────────────────────────────────────────
   String _statusMessage = 'Initializing...';
   double _progress = 0.0;
-
-  double _fileProgress = 0.0; // Mevcut dosyanın indirme oranı (0.0 - 1.0)
-  String _currentFileName = ''; // İndirilen dosyanın adı
+  double _fileProgress = 0.0;
+  String _logFilePath = '';
 
   static const String _jsonUrl = 'https://dsigner.com.tr/eimza2/files.json';
+
+  IOSink? _logSink;
 
   // ── Logo animation controllers ─────────────────────────────────────────────
   late final AnimationController _logoFadeCtrl;
@@ -290,6 +292,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _logSink?.flush();
+    _logSink?.close();
     _logoFadeCtrl.dispose();
     _logoPulseCtrl.dispose();
     _logoGlowCtrl.dispose();
@@ -299,8 +303,63 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  // ── Work directory ─────────────────────────────────────────────────────────
+  Future<Directory> _getWorkDir() async {
+    if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) {
+      return getApplicationSupportDirectory();
+    }
+    return Directory.current;
+  }
+
+  // ── Logging ────────────────────────────────────────────────────────────────
+  Future<void> _openLog(Directory dir) async {
+    try {
+      final logFile = File('${dir.path}/updater.log');
+      _logSink = logFile.openWrite(mode: FileMode.append);
+      if (mounted) setState(() => _logFilePath = logFile.path);
+      final now = DateTime.now().toIso8601String();
+      _logSink!.writeln('');
+      _logSink!.writeln('══════════════════════════════════════════════════');
+      _logSink!.writeln('Session: $now  |  OS: ${Platform.operatingSystem}');
+      _logSink!.writeln('WorkDir: ${dir.path}');
+      _logSink!.writeln('══════════════════════════════════════════════════');
+    } catch (_) {
+      // Log dosyası açılamazsa güncellemeyi durdurma
+    }
+  }
+
+  void _writeLog(String message) {
+    final ts = DateTime.now().toIso8601String();
+    _logSink?.writeln('[$ts] $message');
+  }
+
+  // ── Zip extraction ─────────────────────────────────────────────────────────
+  Future<void> _extractZip(String zipPath, String destDir) async {
+    _writeLog('Extracting: $zipPath → $destDir');
+    if (Platform.isWindows) {
+      final result = await Process.run('powershell', [
+        '-Command',
+        'Expand-Archive -Force -Path "${zipPath.replaceAll('/', '\\')}" -DestinationPath "${destDir.replaceAll('/', '\\')}"',
+      ]);
+      if (result.exitCode != 0) {
+        throw Exception('Zip açma başarısız: ${result.stderr}');
+      }
+    } else {
+      final result = await Process.run('unzip', ['-o', zipPath, '-d', destDir]);
+      if (result.exitCode != 0) {
+        throw Exception('Zip açma başarısız: ${result.stderr}');
+      }
+      if (Platform.isMacOS) {
+        await Process.run('xattr', ['-dr', 'com.apple.quarantine', destDir]);
+        _writeLog('Quarantine kaldırıldı: $destDir');
+      }
+    }
+    _writeLog('Extraction tamamlandı: $zipPath');
+  }
+
   // ── Status helper with glitch effect ──────────────────────────────────────
   void _setStatus(String message, double progress) {
+    _writeLog(message);
     if (!mounted) return;
     setState(() {
       _progress = progress;
@@ -386,7 +445,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       }
       _setStatus('OS detected: $osType', 0.02);
 
-      // 2. Fetch configuration
+      // 2. Get work directory (macOS: ~/Library/Application Support/...)
+      final appDir = await _getWorkDir();
+      if (!await appDir.exists()) {
+        await appDir.create(recursive: true);
+      }
+      await _openLog(appDir);
+      _writeLog('WorkDir: ${appDir.path}');
+      _writeLog('OS: $osType');
+
+      // 3. Fetch configuration
       _setStatus('Fetching configuration...', 0.05);
       final response = await http.get(Uri.parse(_jsonUrl));
       if (response.statusCode != 200) {
@@ -398,20 +466,21 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         json.decode(response.body) as Map<String, dynamic>,
       );
       final osFiles = config.osFileList.firstWhere(
-            (f) => f.os == osType,
+        (f) => f.os == osType,
         orElse: () => throw Exception('No config found for OS: $osType'),
       );
       _setStatus('Configuration loaded.', 0.10);
 
-      // 3. Process files
-      final appDir = _resolveAppDir();
+      // 4. Process files
       int filesProcessed = 0;
       final total = osFiles.fileList.length;
       final client = http.Client();
 
       try {
       for (final entry in osFiles.fileList) {
-        final localDir = Directory('${appDir.path}/${entry.path}');
+        final localDir = Directory(
+          entry.path.isEmpty ? appDir.path : '${appDir.path}/${entry.path}',
+        );
         if (!await localDir.exists()) {
           await localDir.create(recursive: true);
         }
@@ -431,12 +500,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
           try {
             final request = http.Request('GET', Uri.parse(entry.url));
-            final response = await client.send(request);
+            final httpResponse = await client.send(request).timeout(
+              const Duration(seconds: 30),
+              onTimeout: () => throw Exception('Bağlantı zaman aşımı: ${entry.name}'),
+            );
 
-            final totalBytes = response.contentLength ?? entry.fileSize;
+            final totalBytes = httpResponse.contentLength ?? entry.fileSize;
             int receivedBytes = 0;
 
-            await for (final List<int> chunk in response.stream) {
+            await for (final List<int> chunk in httpResponse.stream) {
               receivedBytes += chunk.length;
               sink.add(chunk);
 
@@ -449,22 +521,42 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
             await sink.flush();
           } catch (e) {
+            _writeLog('Download hatası: $e');
             _setStatus('Download failed: ${entry.name}', 0.0);
             rethrow;
           } finally {
             await sink.close();
+            client.close();
           }
 
           final finalLength = await file.length();
           if (finalLength != entry.fileSize) {
             throw Exception(
-                'Size mismatch for ${entry.name}. Expected: ${entry.fileSize}, Got: $finalLength'
+              'Size mismatch for ${entry.name}. Expected: ${entry.fileSize}, Got: $finalLength',
             );
+          }
+
+          // macOS: karantina kaldır
+          if (Platform.isMacOS) {
+            await Process.run('xattr', ['-dr', 'com.apple.quarantine', filePath]);
+            _writeLog('Quarantine kaldırıldı: $filePath');
+          }
+
+          // Shell script: çalıştırma izni ver
+          if ((Platform.isMacOS || Platform.isLinux) && entry.name.endsWith('.sh')) {
+            await Process.run('chmod', ['+x', filePath]);
+            _writeLog('chmod +x: $filePath');
+          }
+
+          // Zip dosyaları otomatik aç
+          if (entry.name.endsWith('.zip')) {
+            _setStatus('Extracting: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
+            await _extractZip(filePath, localDir.path);
           }
         }
 
         filesProcessed++;
-        setState(() => _fileProgress = 0.0); // Dosya bitince barı sıfırla
+        if (mounted) setState(() => _fileProgress = 0.0);
         _setStatus(
           downloadRequired ? '↓ ${entry.name} downloaded.' : '✓ ${entry.name} up to date.',
           0.10 + 0.80 * (filesProcessed / total),
@@ -474,7 +566,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         client.close();
       }
 
-      // 4. Run post-update commands
+      // 5. Run post-update commands
       _setStatus('All files verified.', 0.92);
       if (osFiles.runCommands.isNotEmpty) {
         _setStatus('Executing launch commands...', 0.95);
@@ -482,6 +574,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         final commands = osFiles.runCommands;
         for (int i = 0; i < commands.length; i++) {
           final cmd = commands[i].replaceFirst(RegExp(r'^sudo\s+'), '');
+          _writeLog('Running: $cmd');
           if (i < commands.length - 1) {
             await shell.run(cmd);
           } else {
@@ -491,11 +584,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
       }
 
-      // 5. Done
+      // 6. Done
       _setStatus('Update complete! Launching...', 1.0);
+      await _logSink?.flush();
       await Future.delayed(const Duration(seconds: 2));
       if (mounted) exit(0);
     } catch (e) {
+      _writeLog('HATA: $e');
+      await _logSink?.flush();
       if (mounted) {
         _setStatus('Error: ${e.toString()}', 0.0);
         await _showErrorDialog(e.toString());
@@ -557,6 +653,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                 // ── URL chips ────────────────────────────────────────────
                 const _UrlStrip(),
+                const SizedBox(height: 12),
+
+                // ── Log file path ─────────────────────────────────────────
+                if (_logFilePath.isNotEmpty)
+                  Text(
+                    'Log: $_logFilePath',
+                    textAlign: TextAlign.center,
+                    style: GoogleFonts.robotoMono(
+                      color: const Color(0xFF2A3A4A),
+                      fontSize: 9,
+                    ),
+                  ),
               ],
             ),
           ),
