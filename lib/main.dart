@@ -210,7 +210,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   double _fileProgress = 0.0;
   String _logFilePath = '';
 
-  static const String _jsonUrl = 'https://dsigner.com.tr/eimza2/files.json';
+  static const String _jsonUrl = 'http://media.codenfast.com/eimza2/files.json';
 
   IOSink? _logSink;
 
