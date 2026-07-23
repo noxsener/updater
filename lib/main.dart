@@ -10,7 +10,6 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import 'package:process_run/shell.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -38,23 +37,43 @@ class FileEntry {
   );
 }
 
+class LaunchConfig {
+  final String executable; // glob destekler: jdk*/Contents/Home/bin/java
+  final List<String> args;
+
+  const LaunchConfig({required this.executable, required this.args});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UYGULAMA BAŞLATMA YAPILANDIRMASI
+// Farklı bir uygulama için bu bölümü düzenleyin.
+// executable: workDir'e göre göreli yol, '*' glob karakteri desteklenir.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _jvmArgs = [
+  '--add-exports=jdk.crypto.cryptoki/sun.security.pkcs11.wrapper=ALL-UNNAMED',
+  '--add-opens=jdk.crypto.cryptoki/sun.security.pkcs11.wrapper=ALL-UNNAMED',
+  '-jar',
+  'sgn.jar',
+];
+
+const _launchConfigs = <String, LaunchConfig>{
+  'macos':   LaunchConfig(executable: 'jdk*/Contents/Home/bin/java', args: _jvmArgs),
+  'linux':   LaunchConfig(executable: 'jdk*/bin/java',               args: _jvmArgs),
+  'windows': LaunchConfig(executable: r'jdk*\bin\java.exe',          args: _jvmArgs),
+};
+
 class OsFiles {
   final String os;
   final List<FileEntry> fileList;
-  final List<String> runCommands;
 
-  const OsFiles({
-    required this.os,
-    required this.fileList,
-    required this.runCommands,
-  });
+  const OsFiles({required this.os, required this.fileList});
 
   factory OsFiles.fromJson(Map<String, dynamic> json) => OsFiles(
     os: json['os'] as String,
     fileList: (json['fileList'] as List)
         .map((i) => FileEntry.fromJson(i as Map<String, dynamic>))
         .toList(),
-    runCommands: List<String>.from(json['runCommands'] as List),
   );
 }
 
@@ -126,7 +145,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return MaterialApp(
-      title: 'DSigner EImza Updater',
+      title: 'DSigner Eİmza Güncelleyici',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -186,7 +205,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // ── Update state ───────────────────────────────────────────────────────────
-  String _statusMessage = 'Initializing...';
+  String _statusMessage = 'Başlatılıyor...';
   double _progress = 0.0;
   double _fileProgress = 0.0;
   String _logFilePath = '';
@@ -218,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   ];
 
   // ── Glitch text ────────────────────────────────────────────────────────────
-  String _displayStatus = 'Initializing...';
+  String _displayStatus = 'Başlatılıyor...';
   static const _glitchChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@!%';
   final _rng = Random();
 
@@ -357,6 +376,59 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     _writeLog('Extraction tamamlandı: $zipPath');
   }
 
+  // ── Config-based launcher ─────────────────────────────────────────────────
+  Future<void> _launchFromConfig(LaunchConfig config, Directory workDir) async {
+    final exePath = await _resolveExecutable(config.executable, workDir);
+
+    if (!await File(exePath).exists()) {
+      throw Exception('Çalıştırılabilir dosya bulunamadı: $exePath');
+    }
+
+    _writeLog('Başlatılıyor: $exePath');
+    _writeLog('Argümanlar: ${config.args.join(' ')}');
+
+    await Process.start(
+      exePath,
+      config.args,
+      workingDirectory: workDir.path,
+      mode: ProcessStartMode.detached,
+    );
+    _writeLog('Uygulama başlatıldı.');
+  }
+
+  Future<String> _resolveExecutable(String pattern, Directory workDir) async {
+    final parts = pattern.replaceAll('\\', '/').split('/');
+    String current = workDir.path;
+
+    for (final part in parts) {
+      if (part.contains('*')) {
+        final dir = Directory(current);
+        String? matched;
+        await for (final entity in dir.list()) {
+          final name = entity.path.split(Platform.pathSeparator).last;
+          if (_globSimple(part, name)) {
+            matched = entity.path;
+            break;
+          }
+        }
+        if (matched == null) {
+          throw Exception('"$part" ile eşleşen dosya/dizin bulunamadı ($current)');
+        }
+        current = matched;
+      } else {
+        current = '$current${Platform.pathSeparator}$part';
+      }
+    }
+    return current;
+  }
+
+  bool _globSimple(String pattern, String name) {
+    final regex = RegExp(
+      '^${pattern.split('*').map(RegExp.escape).join('.*')}\$',
+    );
+    return regex.hasMatch(name);
+  }
+
   // ── Status helper with glitch effect ──────────────────────────────────────
   void _setStatus(String message, double progress) {
     _writeLog(message);
@@ -403,7 +475,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           children: [
             Icon(Icons.error_outline, color: Color(0xFFFF5370), size: 22),
             SizedBox(width: 10),
-            Text('Update Error'),
+            Text('Güncelleme Hatası'),
           ],
         ),
         content: SingleChildScrollView(child: Text(message)),
@@ -413,7 +485,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Navigator.of(ctx).pop();
               exit(1);
             },
-            child: const Text('EXIT'),
+            child: const Text('ÇIKIŞ'),
           ),
         ],
       ),
@@ -438,12 +510,12 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Future<void> _startUpdateProcess() async {
     try {
       // 1. Determine OS
-      _setStatus('Detecting operating system...', 0.0);
+      _setStatus('İşletim sistemi algılanıyor...', 0.0);
       final osType = _getOperatingSystem();
       if (osType == 'unsupported') {
-        throw Exception('Unsupported operating system.');
+        throw Exception('Desteklenmeyen işletim sistemi.');
       }
-      _setStatus('OS detected: $osType', 0.02);
+      _setStatus('İşletim sistemi: $osType', 0.02);
 
       // 2. Get work directory (macOS: ~/Library/Application Support/...)
       final appDir = await _getWorkDir();
@@ -455,11 +527,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       _writeLog('OS: $osType');
 
       // 3. Fetch configuration
-      _setStatus('Fetching configuration...', 0.05);
+      _setStatus('Yapılandırma alınıyor...', 0.05);
       final response = await http.get(Uri.parse(_jsonUrl));
       if (response.statusCode != 200) {
         throw Exception(
-          'Server returned ${response.statusCode} for configuration.',
+          'Sunucu yapılandırma için ${response.statusCode} yanıtı döndürdü.',
         );
       }
       final config = RootContext.fromJson(
@@ -467,9 +539,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
       );
       final osFiles = config.osFileList.firstWhere(
         (f) => f.os == osType,
-        orElse: () => throw Exception('No config found for OS: $osType'),
+        orElse: () => throw Exception('$osType için yapılandırma bulunamadı.'),
       );
-      _setStatus('Configuration loaded.', 0.10);
+      _setStatus('Yapılandırma yüklendi.', 0.10);
 
       // 4. Process files
       int filesProcessed = 0;
@@ -494,7 +566,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
 
         if (downloadRequired) {
-          _setStatus('Downloading: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
+          _setStatus('İndiriliyor: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
 
           final sink = file.openWrite();
 
@@ -502,7 +574,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             final request = http.Request('GET', Uri.parse(entry.url));
             final httpResponse = await client.send(request).timeout(
               const Duration(seconds: 30),
-              onTimeout: () => throw Exception('Bağlantı zaman aşımı: ${entry.name}'),
+              onTimeout: () => throw Exception('Bağlantı zaman aşımına uğradı: ${entry.name}'),
             );
 
             final totalBytes = httpResponse.contentLength ?? entry.fileSize;
@@ -522,17 +594,16 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             await sink.flush();
           } catch (e) {
             _writeLog('Download hatası: $e');
-            _setStatus('Download failed: ${entry.name}', 0.0);
+            _setStatus('İndirme başarısız: ${entry.name}', 0.0);
             rethrow;
           } finally {
             await sink.close();
-            client.close();
           }
 
           final finalLength = await file.length();
           if (finalLength != entry.fileSize) {
             throw Exception(
-              'Size mismatch for ${entry.name}. Expected: ${entry.fileSize}, Got: $finalLength',
+              '${entry.name} boyut uyuşmazlığı. Beklenen: ${entry.fileSize}, Alınan: $finalLength',
             );
           }
 
@@ -550,7 +621,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
           // Zip dosyaları otomatik aç
           if (entry.name.endsWith('.zip')) {
-            _setStatus('Extracting: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
+            _setStatus('Açılıyor: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
             await _extractZip(filePath, localDir.path);
           }
         }
@@ -558,7 +629,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         filesProcessed++;
         if (mounted) setState(() => _fileProgress = 0.0);
         _setStatus(
-          downloadRequired ? '↓ ${entry.name} downloaded.' : '✓ ${entry.name} up to date.',
+          downloadRequired ? '↓ ${entry.name} indirildi.' : '✓ ${entry.name} güncel.',
           0.10 + 0.80 * (filesProcessed / total),
         );
       }
@@ -566,26 +637,17 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         client.close();
       }
 
-      // 5. Run post-update commands
-      _setStatus('All files verified.', 0.92);
-      if (osFiles.runCommands.isNotEmpty) {
-        _setStatus('Executing launch commands...', 0.95);
-        final shell = Shell(workingDirectory: appDir.path);
-        final commands = osFiles.runCommands;
-        for (int i = 0; i < commands.length; i++) {
-          final cmd = commands[i].replaceFirst(RegExp(r'^sudo\s+'), '');
-          _writeLog('Running: $cmd');
-          if (i < commands.length - 1) {
-            await shell.run(cmd);
-          } else {
-            // ignore: unawaited_futures
-            shell.run(cmd);
-          }
-        }
+      // 5. Launch app
+      _setStatus('Tüm dosyalar doğrulandı.', 0.92);
+      _setStatus('Uygulama başlatılıyor...', 0.95);
+      final launchConfig = _launchConfigs[osType];
+      if (launchConfig == null) {
+        throw Exception('$osType için başlatma yapılandırması tanımlı değil.');
       }
+      await _launchFromConfig(launchConfig, appDir);
 
       // 6. Done
-      _setStatus('Update complete! Launching...', 1.0);
+      _setStatus('Güncelleme tamamlandı! Başlatılıyor...', 1.0);
       await _logSink?.flush();
       await Future.delayed(const Duration(seconds: 2));
       if (mounted) exit(0);
@@ -634,7 +696,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                 // ── Themed progress bar ──────────────────────────────────
                 _CyberProgressBar(
-                  label: 'TOTAL PROGRESS',
+                  label: 'TOPLAM İLERLEME',
                   progress: _progress,
                   shimmer: _progressShimmerCtrl,
                 ),
@@ -657,13 +719,41 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                 // ── Log file path ─────────────────────────────────────────
                 if (_logFilePath.isNotEmpty)
-                  Text(
-                    'Log: $_logFilePath',
-                    textAlign: TextAlign.center,
-                    style: GoogleFonts.robotoMono(
-                      color: const Color(0xFF2A3A4A),
-                      fontSize: 9,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Log: $_logFilePath',
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.robotoMono(
+                            color: const Color(0xFF5A7A9A),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message: 'Finder\'da aç',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(4),
+                          onTap: () => Process.run(
+                            'open',
+                            [File(_logFilePath).parent.path],
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.folder_open_outlined,
+                              size: 14,
+                              color: Color(0xFF00E5FF),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
               ],
             ),
@@ -950,7 +1040,7 @@ class _FileProgressBar extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'File Download: ${(progress * 100).toStringAsFixed(2)}%',
+          'Dosya İndirme: ${(progress * 100).toStringAsFixed(2)}%',
           style: GoogleFonts.robotoMono(
             color: Colors.white70,
             fontSize: 10,
