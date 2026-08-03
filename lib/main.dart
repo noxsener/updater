@@ -9,7 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:meditek_signer_updater/theme.dart';
-import 'package:process_run/shell.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -37,23 +37,43 @@ class FileEntry {
   );
 }
 
+class LaunchConfig {
+  final String executable; // glob destekler: jdk*/Contents/Home/bin/java
+  final List<String> args;
+
+  const LaunchConfig({required this.executable, required this.args});
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// UYGULAMA BAŞLATMA YAPILANDIRMASI
+// Farklı bir uygulama için bu bölümü düzenleyin.
+// executable: workDir'e göre göreli yol, '*' glob karakteri desteklenir.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const _jvmArgs = [
+  '--add-exports=jdk.crypto.cryptoki/sun.security.pkcs11.wrapper=ALL-UNNAMED',
+  '--add-opens=jdk.crypto.cryptoki/sun.security.pkcs11.wrapper=ALL-UNNAMED',
+  '-jar',
+  'sgn.jar',
+];
+
+const _launchConfigs = <String, LaunchConfig>{
+  'macos':   LaunchConfig(executable: 'jdk-17.0.19.jdk/Contents/Home/bin/java', args: _jvmArgs),
+  'linux':   LaunchConfig(executable: 'java-17-openjdk-amd64/bin/java',         args: _jvmArgs),
+  'windows': LaunchConfig(executable: r'jdk-17.0.16\bin\java.exe',              args: _jvmArgs),
+};
+
 class OsFiles {
   final String os;
   final List<FileEntry> fileList;
-  final List<String> runCommands;
 
-  const OsFiles({
-    required this.os,
-    required this.fileList,
-    required this.runCommands,
-  });
+  const OsFiles({required this.os, required this.fileList});
 
   factory OsFiles.fromJson(Map<String, dynamic> json) => OsFiles(
     os: json['os'] as String,
     fileList: (json['fileList'] as List)
         .map((i) => FileEntry.fromJson(i as Map<String, dynamic>))
         .toList(),
-    runCommands: List<String>.from(json['runCommands'] as List),
   );
 }
 
@@ -185,13 +205,13 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   // ── Update state ───────────────────────────────────────────────────────────
-  String _statusMessage = 'Initializing...';
+  String _statusMessage = 'Başlatılıyor...';
   double _progress = 0.0;
-
-  double _fileProgress = 0.0; // Mevcut dosyanın indirme oranı (0.0 - 1.0)
-  String _currentFileName = ''; // İndirilen dosyanın adı
+  double _fileProgress = 0.0;
+  String _logFilePath = '';
 
   static const String _jsonUrl = 'http://udei.meditek.net/files.json';
+  IOSink? _logSink;
 
   // ── Logo animation controllers ─────────────────────────────────────────────
   late final AnimationController _logoFadeCtrl;
@@ -215,7 +235,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   ];
 
   // ── Glitch text ────────────────────────────────────────────────────────────
-  String _displayStatus = 'Initializing...';
+  String _displayStatus = 'Başlatılıyor...';
   static const _glitchChars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#@!%';
   final _rng = Random();
 
@@ -289,6 +309,8 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   @override
   void dispose() {
+    _logSink?.flush();
+    _logSink?.close();
     _logoFadeCtrl.dispose();
     _logoPulseCtrl.dispose();
     _logoGlowCtrl.dispose();
@@ -298,8 +320,84 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  // ── Work directory ─────────────────────────────────────────────────────────
+  Future<Directory> _getWorkDir() async {
+    if (Platform.isMacOS || Platform.isLinux || Platform.isWindows) {
+      return getApplicationSupportDirectory();
+    }
+    return Directory.current;
+  }
+
+  // ── Logging ────────────────────────────────────────────────────────────────
+  Future<void> _openLog(Directory dir) async {
+    try {
+      final logFile = File('${dir.path}/updater.log');
+      _logSink = logFile.openWrite(mode: FileMode.append);
+      if (mounted) setState(() => _logFilePath = logFile.path);
+      final now = DateTime.now().toIso8601String();
+      _logSink!.writeln('');
+      _logSink!.writeln('══════════════════════════════════════════════════');
+      _logSink!.writeln('Session: $now  |  OS: ${Platform.operatingSystem}');
+      _logSink!.writeln('WorkDir: ${dir.path}');
+      _logSink!.writeln('══════════════════════════════════════════════════');
+    } catch (_) {
+      // Log dosyası açılamazsa güncellemeyi durdurma
+    }
+  }
+
+  void _writeLog(String message) {
+    final ts = DateTime.now().toIso8601String();
+    _logSink?.writeln('[$ts] $message');
+  }
+
+  // ── Zip extraction ─────────────────────────────────────────────────────────
+  Future<void> _extractZip(String zipPath, String destDir) async {
+    _writeLog('Extracting: $zipPath → $destDir');
+    if (Platform.isWindows) {
+      final result = await Process.run('powershell', [
+        '-Command',
+        'Expand-Archive -Force -Path "${zipPath.replaceAll('/', '\\')}" -DestinationPath "${destDir.replaceAll('/', '\\')}"',
+      ]);
+      if (result.exitCode != 0) {
+        throw Exception('Zip açma başarısız: ${result.stderr}');
+      }
+    } else {
+      final result = await Process.run('unzip', ['-o', zipPath, '-d', destDir]);
+      if (result.exitCode != 0) {
+        throw Exception('Zip açma başarısız: ${result.stderr}');
+      }
+      if (Platform.isMacOS) {
+        await Process.run('xattr', ['-dr', 'com.apple.quarantine', destDir]);
+        _writeLog('Quarantine kaldırıldı: $destDir');
+      }
+    }
+    _writeLog('Extraction tamamlandı: $zipPath');
+  }
+
+  // ── Config-based launcher ─────────────────────────────────────────────────
+  Future<void> _launchFromConfig(LaunchConfig config, Directory workDir) async {
+    final exePath = '${workDir.path}${Platform.pathSeparator}'
+        '${config.executable.replaceAll('/', Platform.pathSeparator).replaceAll('\\', Platform.pathSeparator)}';
+
+    if (!await File(exePath).exists()) {
+      throw Exception('Çalıştırılabilir dosya bulunamadı: $exePath');
+    }
+
+    _writeLog('Başlatılıyor: $exePath');
+    _writeLog('Argümanlar: ${config.args.join(' ')}');
+
+    await Process.start(
+      exePath,
+      config.args,
+      workingDirectory: workDir.path,
+      mode: ProcessStartMode.detached,
+    );
+    _writeLog('Uygulama başlatıldı.');
+  }
+
   // ── Status helper with glitch effect ──────────────────────────────────────
   void _setStatus(String message, double progress) {
+    _writeLog(message);
     if (!mounted) return;
     setState(() {
       _progress = progress;
@@ -343,7 +441,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           children: [
             Icon(Icons.error_outline, color: Color(0xFFFF5370), size: 22),
             SizedBox(width: 10),
-            Text('Update Error'),
+            Text('Güncelleme Hatası'),
           ],
         ),
         content: SingleChildScrollView(child: Text(message)),
@@ -353,48 +451,74 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               Navigator.of(ctx).pop();
               exit(1);
             },
-            child: const Text('EXIT'),
+            child: const Text('ÇIKIŞ'),
           ),
         ],
       ),
     );
   }
 
+  // Returns the directory where files should be written.
+  // On macOS .app bundles, Directory.current is "/" when launched from Finder,
+  // so we derive the path from the executable location instead.
+  Directory _resolveAppDir() {
+    final exe = File(Platform.resolvedExecutable);
+    var dir = exe.parent;
+    // Inside a .app bundle the executable lives at Foo.app/Contents/MacOS/Foo.
+    // Walk up to the folder that *contains* the .app so files land beside it.
+    if (dir.path.contains('.app/Contents/MacOS')) {
+      return dir.parent.parent.parent;
+    }
+    return dir;
+  }
+
   // ── Core update logic ──────────────────────────────────────────────────────
   Future<void> _startUpdateProcess() async {
     try {
       // 1. Determine OS
-      _setStatus('Detecting operating system...', 0.0);
+      _setStatus('İşletim sistemi algılanıyor...', 0.0);
       final osType = _getOperatingSystem();
       if (osType == 'unsupported') {
-        throw Exception('Unsupported operating system.');
+        throw Exception('Desteklenmeyen işletim sistemi.');
       }
-      _setStatus('OS detected: $osType', 0.02);
+      _setStatus('İşletim sistemi: $osType', 0.02);
 
-      // 2. Fetch configuration
-      _setStatus('Fetching configuration...', 0.05);
+      // 2. Get work directory (macOS: ~/Library/Application Support/...)
+      final appDir = await _getWorkDir();
+      if (!await appDir.exists()) {
+        await appDir.create(recursive: true);
+      }
+      await _openLog(appDir);
+      _writeLog('WorkDir: ${appDir.path}');
+      _writeLog('OS: $osType');
+
+      // 3. Fetch configuration
+      _setStatus('Yapılandırma alınıyor...', 0.05);
       final response = await http.get(Uri.parse(_jsonUrl));
       if (response.statusCode != 200) {
         throw Exception(
-          'Server returned ${response.statusCode} for configuration.',
+          'Sunucu yapılandırma için ${response.statusCode} yanıtı döndürdü.',
         );
       }
       final config = RootContext.fromJson(
         json.decode(response.body) as Map<String, dynamic>,
       );
       final osFiles = config.osFileList.firstWhere(
-            (f) => f.os == osType,
-        orElse: () => throw Exception('No config found for OS: $osType'),
+        (f) => f.os == osType,
+        orElse: () => throw Exception('$osType için yapılandırma bulunamadı.'),
       );
-      _setStatus('Configuration loaded.', 0.10);
+      _setStatus('Yapılandırma yüklendi.', 0.10);
 
-      // 3. Process files
-      final appDir = Directory.current;
+      // 4. Process files
       int filesProcessed = 0;
       final total = osFiles.fileList.length;
+      final client = http.Client();
 
+      try {
       for (final entry in osFiles.fileList) {
-        final localDir = Directory('${appDir.path}/${entry.path}');
+        final localDir = Directory(
+          entry.path.isEmpty ? appDir.path : '${appDir.path}/${entry.path}',
+        );
         if (!await localDir.exists()) {
           await localDir.create(recursive: true);
         }
@@ -408,22 +532,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         }
 
         if (downloadRequired) {
-          _setStatus('Downloading: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
+          _setStatus('İndiriliyor: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
 
-          final client = http.Client();
-          final sink = file.openWrite(); // Dosyayı yazmak için aç
+          final sink = file.openWrite();
 
           try {
             final request = http.Request('GET', Uri.parse(entry.url));
-            final response = await client.send(request);
+            final httpResponse = await client.send(request).timeout(
+              const Duration(seconds: 30),
+              onTimeout: () => throw Exception('Bağlantı zaman aşımına uğradı: ${entry.name}'),
+            );
 
-            final totalBytes = response.contentLength ?? entry.fileSize;
+            final totalBytes = httpResponse.contentLength ?? entry.fileSize;
             int receivedBytes = 0;
 
-            // 'listen' yerine 'await for' kullanarak akışı daha güvenli yönetiyoruz
-            await for (final List<int> chunk in response.stream) {
+            await for (final List<int> chunk in httpResponse.stream) {
               receivedBytes += chunk.length;
-              sink.add(chunk); // Veriyi sink'e ekle
+              sink.add(chunk);
 
               if (mounted) {
                 setState(() {
@@ -432,57 +557,77 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
               }
             }
 
-            // ÖNEMLİ: Stream bittikten sonra sink'in tamamen boşaltılıp kapatılmasını bekle
             await sink.flush();
-            await sink.close();
-
           } catch (e) {
-
-            _setStatus('Download failed: ${entry.name}', 0.0);
+            _writeLog('Download hatası: $e');
+            _setStatus('İndirme başarısız: ${entry.name}', 0.0);
             rethrow;
           } finally {
-            await sink.close(); // Hata durumunda dosyayı kapat
-            client.close();
+            await sink.close();
           }
 
-          // Artık dosya kapandı, boyut kontrolü yapabiliriz
           final finalLength = await file.length();
           if (finalLength != entry.fileSize) {
             throw Exception(
-                'Size mismatch for ${entry.name}. Expected: ${entry.fileSize}, Got: $finalLength'
+              '${entry.name} boyut uyuşmazlığı. Beklenen: ${entry.fileSize}, Alınan: $finalLength',
             );
+          }
+
+          // macOS: karantina kaldır
+          if (Platform.isMacOS) {
+            await Process.run('xattr', ['-dr', 'com.apple.quarantine', filePath]);
+            _writeLog('Quarantine kaldırıldı: $filePath');
+          }
+
+          // Shell script veya bin/ içindeki dosyalara çalıştırma izni ver
+          final inBinDir = entry.path.split('/').contains('bin') ||
+              entry.path.split('\\').contains('bin');
+          if ((Platform.isMacOS || Platform.isLinux) &&
+              (entry.name.endsWith('.sh') || inBinDir)) {
+            await Process.run('chmod', ['+x', filePath]);
+            _writeLog('chmod +x: $filePath');
+          }
+
+          // Zip dosyaları otomatik aç
+          if (entry.name.endsWith('.zip')) {
+            _setStatus('Açılıyor: ${entry.name}', 0.10 + 0.80 * (filesProcessed / total));
+            await _extractZip(filePath, localDir.path);
+            // unzip strips execute bits on macOS/Linux — restore them for bin/ files
+            if (Platform.isMacOS || Platform.isLinux) {
+              await Process.run('find', [localDir.path, '-path', '*/bin/*', '-type', 'f', '-exec', 'chmod', '+x', '{}', '+']);
+              _writeLog('chmod +x bin files in: ${localDir.path}');
+            }
           }
         }
 
         filesProcessed++;
-        setState(() => _fileProgress = 0.0); // Dosya bitince barı sıfırla
+        if (mounted) setState(() => _fileProgress = 0.0);
         _setStatus(
-          downloadRequired ? '↓ ${entry.name} downloaded.' : '✓ ${entry.name} up to date.',
+          downloadRequired ? '↓ ${entry.name} indirildi.' : '✓ ${entry.name} güncel.',
           0.10 + 0.80 * (filesProcessed / total),
         );
       }
-
-      // 4. Run post-update commands
-      _setStatus('All files verified.', 0.92);
-      if (osFiles.runCommands.isNotEmpty) {
-        _setStatus('Executing launch commands...', 0.95);
-        final shell = Shell(workingDirectory: appDir.path);
-        final commands = osFiles.runCommands;
-        for (int i = 0; i < commands.length; i++) {
-          if (i < commands.length - 1) {
-            await shell.run(commands[i]);
-          } else {
-            // ignore: unawaited_futures
-            shell.run(commands[i]);
-          }
-        }
+      } finally {
+        client.close();
       }
 
-      // 5. Done
-      _setStatus('Update complete! Launching...', 1.0);
+      // 5. Launch app
+      _setStatus('Tüm dosyalar doğrulandı.', 0.92);
+      _setStatus('Uygulama başlatılıyor...', 0.95);
+      final launchConfig = _launchConfigs[osType];
+      if (launchConfig == null) {
+        throw Exception('$osType için başlatma yapılandırması tanımlı değil.');
+      }
+      await _launchFromConfig(launchConfig, appDir);
+
+      // 6. Done
+      _setStatus('Güncelleme tamamlandı! Başlatılıyor...', 1.0);
+      await _logSink?.flush();
       await Future.delayed(const Duration(seconds: 2));
       if (mounted) exit(0);
     } catch (e) {
+      _writeLog('HATA: $e');
+      await _logSink?.flush();
       if (mounted) {
         _setStatus('Error: ${e.toString()}', 0.0);
         await _showErrorDialog(e.toString());
@@ -525,7 +670,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                 // ── Themed progress bar ──────────────────────────────────
                 _CyberProgressBar(
-                  label: 'TOTAL PROGRESS',
+                  label: 'TOPLAM İLERLEME',
                   progress: _progress,
                   shimmer: _progressShimmerCtrl,
                 ),
@@ -544,6 +689,46 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
                 // ── URL chips ────────────────────────────────────────────
                 const _UrlStrip(),
+                const SizedBox(height: 12),
+
+                // ── Log file path ─────────────────────────────────────────
+                if (_logFilePath.isNotEmpty)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Log: $_logFilePath',
+                          textAlign: TextAlign.center,
+                          overflow: TextOverflow.ellipsis,
+                          style: GoogleFonts.robotoMono(
+                            color: const Color(0xFF5A7A9A),
+                            fontSize: 10,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Tooltip(
+                        message: 'Finder\'da aç',
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(4),
+                          onTap: () => Process.run(
+                            'open',
+                            [File(_logFilePath).parent.path],
+                          ),
+                          child: const Padding(
+                            padding: EdgeInsets.all(4),
+                            child: Icon(
+                              Icons.folder_open_outlined,
+                              size: 14,
+                              color: Color(0xFF00E5FF),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
           ),
@@ -829,7 +1014,7 @@ class _FileProgressBar extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'File Download: ${(progress * 100).toStringAsFixed(2)}%',
+          'Dosya İndirme: ${(progress * 100).toStringAsFixed(2)}%',
           style: GoogleFonts.robotoMono(
             color: Colors.white70,
             fontSize: 10,
@@ -1150,7 +1335,7 @@ Future<void> _runGenerator(List<String> rawArgs) async {
 
   _log('');
   _log('╔══════════════════════════════════════════════╗');
-  _log('║   Codenfast Updater — JSON Generator         ║');
+  _log('║   DSigner Updater — JSON Generator           ║');
   _log('╚══════════════════════════════════════════════╝');
   _log('');
   _log('  Root dir : ${root.path}');
