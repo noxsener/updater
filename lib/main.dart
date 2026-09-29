@@ -38,7 +38,7 @@ class FileEntry {
 }
 
 class LaunchConfig {
-  final String executable; // glob destekler: jdk*/Contents/Home/bin/java
+  final String executable; // workDir'e göre göreli yol, glob destekler
   final List<String> args;
 
   const LaunchConfig({required this.executable, required this.args});
@@ -50,17 +50,10 @@ class LaunchConfig {
 // executable: workDir'e göre göreli yol, '*' glob karakteri desteklenir.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const _jvmArgs = [
-  '--add-exports=jdk.crypto.cryptoki/sun.security.pkcs11.wrapper=ALL-UNNAMED',
-  '--add-opens=jdk.crypto.cryptoki/sun.security.pkcs11.wrapper=ALL-UNNAMED',
-  '-jar',
-  'sgn.jar',
-];
-
 const _launchConfigs = <String, LaunchConfig>{
-  'macos':   LaunchConfig(executable: 'jdk-17.0.19.jdk/Contents/Home/bin/java', args: _jvmArgs),
-  'linux':   LaunchConfig(executable: 'java-17-openjdk-amd64/bin/java',         args: _jvmArgs),
-  'windows': LaunchConfig(executable: r'jdk-17.0.16\bin\java.exe',              args: _jvmArgs),
+  'macos':   LaunchConfig(executable: 'flykobi2.app/Contents/MacOS/flykobi2', args: []),
+  'linux':   LaunchConfig(executable: 'flykobi2',                             args: []),
+  'windows': LaunchConfig(executable: r'flykobi2.exe',                        args: []),
 };
 
 class OsFiles {
@@ -145,7 +138,7 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return MaterialApp(
-      title: 'DSigner Eİmza Güncelleyici',
+      title: 'Flykobi Güncelleyici',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         useMaterial3: true,
@@ -210,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   double _fileProgress = 0.0;
   String _logFilePath = '';
 
-  static const String _jsonUrl = 'https://dsigner.com.tr/eimza2/files.json';
+  static const String _jsonUrl = 'http://media.codenfast.com/flykobi2/files.json';
 
   IOSink? _logSink;
 
@@ -232,7 +225,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _logoSwitchTimer;
 
   static const List<String> _logoAssets = [
-    'assets/images/DeadLineLogo.png',
     'assets/images/codenfast_logo_transparent_2688_1242.webp',
   ];
 
@@ -645,7 +637,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Widget build(BuildContext context) {
     final theme = CodenfastTheme();
     return Scaffold(
-      // appBar: AppBar(title: const Text('DSigner Updater')),
+      // appBar: AppBar(title: const Text('Flykobi Updater')),
       body: theme.getBody(
         Center(
           child: SingleChildScrollView(
@@ -964,7 +956,7 @@ class _LogoFallback extends StatelessWidget {
           ),
           SizedBox(height: 8),
           Text(
-            'DSigner',
+            'Flykobi',
             style: TextStyle(
               color: Color(0xFF00E5FF),
               fontSize: 11,
@@ -1155,20 +1147,6 @@ class _UrlStrip extends StatelessWidget {
       runSpacing: 8,
       children: [
         InkWell(
-          child: _UrlChip(
-            label: 'http://dsigner.com.tr',
-            icon: Icons.cloud_outlined,
-          ),
-          onTap: () async => launchUrl(Uri.parse('http://dsigner.com.tr')),
-        ),
-        InkWell(
-          child: _UrlChip(
-            label: 'http://deadline.tr',
-            icon: Icons.cloud_outlined,
-          ),
-          onTap: () async => launchUrl(Uri.parse('http://deadline.tr')),
-        ),
-        InkWell(
           child: _UrlChip(label: 'http://codenfast.com', icon: Icons.language),
           onTap: () async => launchUrl(Uri.parse('http://codenfast.com')),
         ),
@@ -1348,7 +1326,7 @@ Future<void> _runGenerator(List<String> rawArgs) async {
 
   _log('');
   _log('╔══════════════════════════════════════════════╗');
-  _log('║   DSigner Updater — JSON Generator           ║');
+  _log('║   Flykobi Updater — JSON Generator           ║');
   _log('╚══════════════════════════════════════════════╝');
   _log('');
   _log('  Root dir : ${root.path}');

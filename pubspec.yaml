@@ -1,5 +1,5 @@
 name: codenfast_updater
-description: "Codenfast Updater"
+description: "Flykobi - Kolay ERP"
 # The following line prevents the package from being accidentally published to
 # pub.dev using `flutter pub publish`. This is preferred for private packages.
 publish_to: 'none' # Remove this line if you wish to publish to pub.dev
@@ -95,7 +95,7 @@ flutter:
   # For details regarding fonts from package dependencies,
   # see https://flutter.dev/to/font-from-package
 msix_config:
-  display_name: D-Signer - Updater
+  display_name: Flykobi - Kolay ERP
   publisher_display_name: Codenfast
   publisher: CN=9095E18A-50C1-4E45-90A2-D2FA40455C72
   identity_name: 5563Codenfast.WireCutter

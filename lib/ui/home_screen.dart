@@ -51,7 +51,7 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text('Updater - Codenfast'),
+        title: Text('Flykobi - Kolay ERP'),
       ),
       body: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -59,7 +59,7 @@ class _HomeScreenState extends State<HomeScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
             Image.asset(
-              'assets/images/DeadLineLogo.png',
+              'assets/images/Icon_1024x1024.png',
               height: 150,
               errorBuilder: (context, error, stackTrace) {
                 return Text('Image not found');
