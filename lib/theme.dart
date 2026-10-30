@@ -103,85 +103,85 @@ class CodenfastTheme {
 
   TextTheme textTheme() {
     return TextTheme(
-      displayLarge: GoogleFonts.museoModerno(
+      displayLarge: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 23,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      displayMedium: GoogleFonts.roboto(
+      displayMedium: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 21,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      displaySmall: GoogleFonts.roboto(
+      displaySmall: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 19,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      headlineLarge: GoogleFonts.roboto(
+      headlineLarge: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 22,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      headlineMedium: GoogleFonts.roboto(
+      headlineMedium: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 21,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      headlineSmall: GoogleFonts.roboto(
+      headlineSmall: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 20,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      titleLarge: GoogleFonts.roboto(
+      titleLarge: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 20,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      titleMedium: GoogleFonts.roboto(
+      titleMedium: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 19,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      titleSmall: GoogleFonts.roboto(
+      titleSmall: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 18,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      labelLarge: GoogleFonts.roboto(
+      labelLarge: GoogleFonts.inter(
           textStyle: const TextStyle(color: Colors.white,
               fontWeight: FontWeight.bold,
               fontSize: 18, shadows: [])),
-      labelMedium: GoogleFonts.roboto(
+      labelMedium: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 17,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      labelSmall: GoogleFonts.roboto(
+      labelSmall: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white,
               fontSize: 15,
               fontWeight: FontWeight.bold,
               shadows: [])),
-      bodyLarge: GoogleFonts.roboto(
+      bodyLarge: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white, fontSize: 18, shadows: [
           ])),
-      bodyMedium: GoogleFonts.roboto(
+      bodyMedium: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white, fontSize: 16, shadows: [
           ])),
-      bodySmall: GoogleFonts.roboto(
+      bodySmall: GoogleFonts.inter(
           textStyle: const TextStyle(
               color: Colors.white, fontSize: 14, shadows: [
           ])),
@@ -189,75 +189,75 @@ class CodenfastTheme {
   }
 
   TextStyle inputFieldStyle() {
-    return GoogleFonts.roboto(
+    return GoogleFonts.inter(
         textStyle: const TextStyle(color: Colors.white, fontSize: 16, shadows: [
         ]));
   }
 
   /*
   TextTheme textTheme2 = TextTheme(
-    displayLarge: GoogleFonts.roboto(
+    displayLarge: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 26,
             fontWeight: FontWeight.bold)),
-    displayMedium: GoogleFonts.roboto(
+    displayMedium: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 24,
             fontWeight: FontWeight.bold)),
-    displaySmall: GoogleFonts.roboto(
+    displaySmall: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 22,
             fontWeight: FontWeight.bold)),
-    headlineLarge: GoogleFonts.roboto(
+    headlineLarge: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 24,
             fontWeight: FontWeight.bold)),
-    headlineMedium: GoogleFonts.roboto(
+    headlineMedium: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 22,
             fontWeight: FontWeight.bold)),
-    headlineSmall: GoogleFonts.roboto(
+    headlineSmall: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 20,
             fontWeight: FontWeight.bold)),
-    titleLarge: GoogleFonts.roboto(
+    titleLarge: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 24,
             fontWeight: FontWeight.bold)),
-    titleMedium: GoogleFonts.roboto(
+    titleMedium: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 20,
             fontWeight: FontWeight.bold)),
-    titleSmall: GoogleFonts.roboto(
+    titleSmall: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 20,
             fontWeight: FontWeight.bold)),
-    labelLarge: GoogleFonts.roboto(
+    labelLarge: GoogleFonts.inter(
         textStyle: const TextStyle(color: Colors.black, fontSize: 16)),
-    labelMedium: GoogleFonts.roboto(
+    labelMedium: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 14,
             fontWeight: FontWeight.bold)),
-    labelSmall: GoogleFonts.roboto(
+    labelSmall: GoogleFonts.inter(
         textStyle: const TextStyle(
             color: Colors.black,
             fontSize: 12,
             fontWeight: FontWeight.bold)),
-    bodyLarge: GoogleFonts.roboto(
+    bodyLarge: GoogleFonts.inter(
         textStyle: const TextStyle(color: Colors.black, fontSize: 16)),
-    bodyMedium: GoogleFonts.roboto(
+    bodyMedium: GoogleFonts.inter(
         textStyle: const TextStyle(color: Colors.black, fontSize: 14)),
-    bodySmall: GoogleFonts.roboto(
+    bodySmall: GoogleFonts.inter(
         textStyle: const TextStyle(color: Colors.black, fontSize: 12)),
   );
 */
@@ -279,13 +279,14 @@ class CodenfastTheme {
       prefixIconColor: Colors.white,
       iconColor: Colors.white,
       hoverColor: Colors.white,
-      labelStyle: textTheme().labelLarge,
+      labelStyle: textTheme().labelSmall?.copyWith(fontSize: 12, fontWeight: FontWeight.w500),
+      floatingLabelStyle: textTheme().labelSmall?.copyWith(fontSize: 12, fontWeight: FontWeight.w500),
       counterStyle: textTheme().bodyMedium,
       prefixStyle: textTheme().bodyMedium,
       suffixStyle: textTheme().bodyMedium,
       errorStyle: textTheme().labelMedium?.copyWith(
           inherit: true, color: Colors.white),
-      hintStyle: textTheme().bodySmall,
+      hintStyle: textTheme().bodySmall?.copyWith(fontSize: 13, color: Colors.white54),
       helperStyle: textTheme().bodySmall,
       floatingLabelAlignment: FloatingLabelAlignment.center,
       helperMaxLines: 3,
