@@ -65,6 +65,14 @@ class AppCard extends StatelessWidget {
                         ),
                         if (c.hasUpdate)
                           const Icon(Icons.system_update_alt, color: Colors.amberAccent, size: 18),
+                        if (UpdateService.isDesktop && c.isInstalled && !c.busy)
+                          IconButton(
+                            tooltip: 'Kaldır',
+                            iconSize: 18,
+                            color: const Color(0xFFFF5370),
+                            icon: const Icon(Icons.delete_outline),
+                            onPressed: () => confirmUninstall(context, c),
+                          ),
                       ],
                     ),
                     if (app.description.isNotEmpty) ...[

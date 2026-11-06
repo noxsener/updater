@@ -12,8 +12,10 @@ import '../services/store_controller.dart';
 import '../services/update_service.dart';
 import '../theme.dart';
 import 'widgets/app_card.dart';
+import 'widgets/download_card.dart';
+import '../services/download_service.dart';
 
-enum _Tab { discover, installed, updates }
+enum _Tab { discover, installed, updates, downloads }
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -24,6 +26,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   UpdateService? _service;
+  DownloadService? _downloads;
   StoreController? _store;
   String? _error;
 
@@ -57,8 +60,11 @@ class _HomeScreenState extends State<HomeScreen> {
           shortcuts: UpdateService.isDesktop ? ShortcutService(log) : null,
         );
       }
+      _downloads ??= UpdateService.isDesktop
+          ? DownloadService(directory: await _downloadsDir(), log: _service!.log)
+          : null;
       final catalog = await CatalogService().fetch();
-      final store = StoreController(catalog, _service!);
+      final store = StoreController(catalog, _service!, downloadService: _downloads);
       _store?.dispose();
       if (!mounted) return;
       setState(() => _store = store);
@@ -67,6 +73,14 @@ class _HomeScreenState extends State<HomeScreen> {
       _service?.log.write('Katalog hatası: $e');
       if (mounted) setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     }
+  }
+
+  /// İşletim sisteminin İndirilenler klasörü; bulunamazsa ana dizindeki `Downloads`.
+  Future<Directory> _downloadsDir() async {
+    final dir = await getDownloadsDirectory();
+    if (dir != null) return dir;
+    final home = Platform.environment['HOME'] ?? Platform.environment['USERPROFILE'] ?? '.';
+    return Directory('$home/Downloads');
   }
 
   void _openLogFolder(String logPath) {
@@ -134,6 +148,8 @@ class _HomeScreenState extends State<HomeScreen> {
                     segments: [
                       const ButtonSegment(value: _Tab.discover, label: Text('Keşfet')),
                       const ButtonSegment(value: _Tab.installed, label: Text('Kurulu')),
+                      if (store.downloads.isNotEmpty)
+                        const ButtonSegment(value: _Tab.downloads, label: Text('İşletim Sistemleri')),
                       ButtonSegment(
                         value: _Tab.updates,
                         label: Badge(
@@ -186,6 +202,7 @@ class _HomeScreenState extends State<HomeScreen> {
       listenable: store,
       builder: (context, _) {
         final tab = UpdateService.isDesktop ? _tab : _Tab.discover;
+        if (tab == _Tab.downloads) return _downloadsView(store);
         final visible = store.apps.where((c) {
           if (tab == _Tab.installed && !c.isInstalled) return false;
           if (tab == _Tab.updates && !c.hasUpdate) return false;
@@ -204,17 +221,28 @@ class _HomeScreenState extends State<HomeScreen> {
                         switch (tab) {
                           _Tab.installed => 'Kurulu uygulama yok.',
                           _Tab.updates => 'Tüm uygulamalar güncel.',
-                          _Tab.discover => 'Sonuç bulunamadı.',
+                          _Tab.discover || _Tab.downloads => 'Sonuç bulunamadı.',
                         },
                         style: const TextStyle(color: Color(0xFF7A8BAA)),
                       ),
                     )
-                  : _grid(visible),
+                  : _grid([for (final a in visible) AppCard(key: ValueKey(a.app.id), c: a)]),
             ),
           ],
         );
       },
     );
+  }
+
+  Widget _downloadsView(StoreController store) {
+    final visible = store.downloads.where((d) {
+      final e = d.entry;
+      return _query.isEmpty || '${e.name} ${e.description} ${e.category ?? ''}'.toLowerCase().contains(_query);
+    }).toList();
+    if (visible.isEmpty) {
+      return const Center(child: Text('Sonuç bulunamadı.', style: TextStyle(color: Color(0xFF7A8BAA))));
+    }
+    return _grid([for (final d in visible) DownloadCard(key: ValueKey(d.entry.id), c: d)]);
   }
 
   Widget _categoryChips(StoreController store) => SizedBox(
@@ -236,7 +264,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ),
   );
 
-  Widget _grid(List<AppController> apps) => LayoutBuilder(
+  Widget _grid(List<Widget> cards) => LayoutBuilder(
     builder: (context, c) {
       final columns = (c.maxWidth / 340).floor().clamp(1, 4);
       return SingleChildScrollView(
@@ -246,11 +274,8 @@ class _HomeScreenState extends State<HomeScreen> {
           runSpacing: 16,
           alignment: WrapAlignment.center,
           children: [
-            for (final a in apps)
-              SizedBox(
-                width: (c.maxWidth - 32 - 16 * (columns - 1)) / columns,
-                child: AppCard(key: ValueKey(a.app.id), c: a),
-              ),
+            for (final card in cards)
+              SizedBox(width: (c.maxWidth - 32 - 16 * (columns - 1)) / columns, child: card),
           ],
         ),
       );

@@ -6,12 +6,15 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../models/catalog.dart';
 import '../services/update_service.dart';
 import '../theme.dart';
 import '../ui/app_theme.dart';
 import '../ui/format.dart';
 import 'admin_app_list.dart';
 import 'admin_config.dart';
+import 'admin_dependencies.dart';
+import 'admin_downloads.dart';
 import 'admin_server_dialog.dart';
 import 'catalog_doc.dart';
 import 'publisher.dart';
@@ -57,6 +60,7 @@ class _AdminScreenState extends State<AdminScreen> {
   final _logoUrl = TextEditingController();
   final _android = TextEditingController();
   final _ios = TextEditingController();
+  List<String> _requires = [];
 
   // Yayın
   final _folder = TextEditingController();
@@ -66,6 +70,10 @@ class _AdminScreenState extends State<AdminScreen> {
   final _variantName = TextEditingController(text: 'Standart');
   final _exe = TextEditingController();
   final _args = TextEditingController();
+  final _setupFile = TextEditingController();
+  final _displayName = TextEditingController();
+  final _setupArgs = TextEditingController();
+  String _instType = 'portable'; // portable | msi | inno (yalnızca Windows)
   String _os = switch (UpdateService.currentOs()) {
     'windows' => 'windows',
     'macos' => 'macos',
@@ -82,8 +90,23 @@ class _AdminScreenState extends State<AdminScreen> {
   bool _busy = false;
 
   List<TextEditingController> get _all => [
-    _appId, _appName, _category, _description, _logoUrl, _android, _ios,
-    _folder, _version, _ignore, _variantId, _variantName, _exe, _args,
+    _appId,
+    _appName,
+    _category,
+    _description,
+    _logoUrl,
+    _android,
+    _ios,
+    _folder,
+    _version,
+    _ignore,
+    _variantId,
+    _variantName,
+    _exe,
+    _args,
+    _setupFile,
+    _displayName,
+    _setupArgs,
   ];
 
   @override
@@ -116,7 +139,13 @@ class _AdminScreenState extends State<AdminScreen> {
   // ── Form ⇄ katalog ─────────────────────────────────────────────────────────
 
   List<String> _metaValues() => [
-    _appName.text, _category.text, _description.text, _logoUrl.text, _android.text, _ios.text,
+    _appName.text,
+    _category.text,
+    _description.text,
+    _logoUrl.text,
+    _android.text,
+    _ios.text,
+    _requires.join(','),
   ].map((s) => s.trim()).toList();
 
   bool get _metaDirty => _creating || !listEquals(_metaValues(), _baseline);
@@ -128,6 +157,7 @@ class _AdminScreenState extends State<AdminScreen> {
     logoUrl: _logoUrl.text,
     android: _android.text,
     ios: _ios.text,
+    requires: _requires,
   );
 
   void _loadApp(Map<String, dynamic> a) {
@@ -139,6 +169,7 @@ class _AdminScreenState extends State<AdminScreen> {
     _logoUrl.text = (a['logoUrl'] as String?) ?? '';
     _android.text = (m['android'] as String?) ?? '';
     _ios.text = (m['ios'] as String?) ?? '';
+    _requires = [...((a['requires'] as List?) ?? const []).cast<String>()];
     _baseline = _metaValues();
     _resetPublishForm(a);
   }
@@ -154,6 +185,7 @@ class _AdminScreenState extends State<AdminScreen> {
       _variantName.text = 'Standart';
       _exe.clear();
       _args.clear();
+      _loadInstaller(null);
     } else {
       _loadVariant(variants.first);
     }
@@ -162,9 +194,18 @@ class _AdminScreenState extends State<AdminScreen> {
   void _loadVariant(Map<String, dynamic> v) {
     _variantId.text = v['id'] as String;
     _variantName.text = (v['name'] as String?) ?? '';
-    final launch = ((v['desktop'] as Map?)?[_os] as Map?)?['launch'] as Map?;
+    final target = (v['desktop'] as Map?)?[_os] as Map?;
+    final launch = target?['launch'] as Map?;
     _exe.text = launch?['exe'] as String? ?? '';
     _args.text = ((launch?['args'] as List?) ?? const []).join('\n');
+    _loadInstaller(target?['installer'] as Map?);
+  }
+
+  void _loadInstaller(Map? installer) {
+    _instType = _os == 'windows' ? (installer?['type'] as String? ?? 'portable') : 'portable';
+    _setupFile.text = installer?['file'] as String? ?? '';
+    _displayName.text = installer?['displayName'] as String? ?? '';
+    _setupArgs.text = ((installer?['args'] as List?) ?? const []).join('\n');
   }
 
   Future<bool> _confirmDiscard() async {
@@ -203,6 +244,7 @@ class _AdminScreenState extends State<AdminScreen> {
       for (final c in [_appId, _appName, _category, _description, _logoUrl, _android, _ios]) {
         c.clear();
       }
+      _requires = [];
       _baseline = _metaValues();
       _resetPublishForm(null);
       _section = _Section.info;
@@ -227,11 +269,7 @@ class _AdminScreenState extends State<AdminScreen> {
   }
 
   Future<void> _editServer() async {
-    final result = await showServerDialog(
-      context,
-      _config,
-      onTest: (c) => SshClient(c).test(),
-    );
+    final result = await showServerDialog(context, _config, onTest: (c) => SshClient(c).test());
     if (result == null) return;
     _config = result;
     await _config.save(_baseDir!);
@@ -245,9 +283,11 @@ class _AdminScreenState extends State<AdminScreen> {
     _say('Katalog çekiliyor...');
     final r = await _publisher.fetchCatalog();
     _applyCatalog(r.doc);
-    _say(r.existed
-        ? '✓ Katalog alındı: ${r.doc.apps.length} uygulama.'
-        : 'Sunucuda katalog yok; ilk kayıtta oluşturulacak.');
+    _say(
+      r.existed
+          ? '✓ Katalog alındı: ${r.doc.apps.length} uygulama.'
+          : 'Sunucuda katalog yok; ilk kayıtta oluşturulacak.',
+    );
   });
 
   /// Yeni kataloğu yükler; seçili uygulama varsa formu (kaydedilmiş haliyle) yeniler.
@@ -290,6 +330,7 @@ class _AdminScreenState extends State<AdminScreen> {
           android: m.android,
           ios: m.ios,
         );
+        doc.setRequires(id, _requires);
       }, _say);
       _applyCatalog((await _publisher.fetchCatalog()).doc, select: id);
     });
@@ -335,6 +376,28 @@ class _AdminScreenState extends State<AdminScreen> {
     meta: _meta,
     launchExe: _exe.text.trim(),
     launchArgs: _args.text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList(),
+    installer: _os == 'windows' && _instType != 'portable'
+        ? InstallerSpec(
+            type: _instType,
+            file: _setupFile.text.trim(),
+            displayName: _displayName.text.trim(),
+            args: _setupArgs.text.split('\n').map((s) => s.trim()).where((s) => s.isNotEmpty).toList(),
+          )
+        : null,
+  );
+
+  Future<void> _openDependencies() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          AdminDependenciesPage(publisher: _publisher, catalog: _catalog!, onCatalog: (doc) => _applyCatalog(doc)),
+    ),
+  );
+
+  Future<void> _openDownloads() => Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) =>
+          AdminDownloadsPage(publisher: _publisher, catalog: _catalog!, onCatalog: (doc) => _applyCatalog(doc)),
+    ),
   );
 
   Future<void> _pickFolder() async {
@@ -356,8 +419,10 @@ class _AdminScreenState extends State<AdminScreen> {
           _say('⚠ $p');
         }
       } else {
-        _say('✓ ${plan.manifest.files.length} dosya, ${formatBytes(plan.manifest.totalSize)} '
-            '(${plan.manifest.ignored} yoksayıldı).');
+        _say(
+          '✓ ${plan.manifest.files.length} dosya, ${formatBytes(plan.manifest.totalSize)} '
+          '(${plan.manifest.ignored} yoksayıldı).',
+        );
       }
     });
   }
@@ -409,6 +474,16 @@ class _AdminScreenState extends State<AdminScreen> {
             tooltip: 'Katalogu yenile',
             onPressed: _busy ? null : _fetchCatalog,
             icon: const Icon(Icons.refresh),
+          ),
+          IconButton(
+            tooltip: 'İşletim sistemleri (ISO)',
+            onPressed: _busy || _catalog == null ? null : _openDownloads,
+            icon: const Icon(Icons.album_outlined),
+          ),
+          IconButton(
+            tooltip: 'Bağımlılıklar (VC++ Redist, DirectX...)',
+            onPressed: _busy || _catalog == null ? null : _openDependencies,
+            icon: const Icon(Icons.extension_outlined),
           ),
           IconButton(
             tooltip: 'Sunucu ayarları',
@@ -478,10 +553,7 @@ class _AdminScreenState extends State<AdminScreen> {
               selected: {_section},
               onSelectionChanged: (s) => setState(() => _section = s.first),
               segments: [
-                ButtonSegment(
-                  value: _Section.info,
-                  label: Text(_metaDirty ? 'Bilgiler •' : 'Bilgiler'),
-                ),
+                ButtonSegment(value: _Section.info, label: Text(_metaDirty ? 'Bilgiler •' : 'Bilgiler')),
                 const ButtonSegment(value: _Section.publish, label: Text('Yayın')),
               ],
             ),
@@ -503,14 +575,19 @@ class _AdminScreenState extends State<AdminScreen> {
   );
 
   Widget _infoTab() {
-    final variants =
-        ((_catalog?.app(_selectedId ?? '')?['variants'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    final variants = ((_catalog?.app(_selectedId ?? '')?['variants'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _row([
-          _f('Uygulama kimliği (id)', _appId,
-              hint: 'flykobi', enabled: _creating, helper: _creating ? 'Sonradan değiştirilemez.' : null),
+          _f(
+            'Uygulama kimliği (id)',
+            _appId,
+            hint: 'flykobi',
+            enabled: _creating,
+            helper: _creating ? 'Sonradan değiştirilemez.' : null,
+          ),
           _f('Ad', _appName, flex: 2, onChanged: _touchMeta),
           _f('Kategori', _category, onChanged: _touchMeta),
         ]),
@@ -520,6 +597,28 @@ class _AdminScreenState extends State<AdminScreen> {
           _f('Play Store linki', _android, onChanged: _touchMeta),
           _f('App Store linki', _ios, onChanged: _touchMeta),
         ]),
+        if ((_catalog?.dependencies ?? const []).isNotEmpty) ...[
+          Text(
+            'Gerekli bağımlılıklar (uygulamadan önce, eksikse kurulur)',
+            style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF00E5FF)),
+          ),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              for (final d in _catalog!.dependencies)
+                FilterChip(
+                  label: Text((d['name'] as String?) ?? d['id'] as String),
+                  selected: _requires.contains(d['id']),
+                  onSelected: (on) => setState(() {
+                    on ? _requires.add(d['id'] as String) : _requires.remove(d['id']);
+                  }),
+                ),
+            ],
+          ),
+          const SizedBox(height: 12),
+        ],
         Wrap(
           spacing: 12,
           runSpacing: 8,
@@ -547,8 +646,10 @@ class _AdminScreenState extends State<AdminScreen> {
           Text('Sürümler / varyantlar', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF00E5FF))),
           const SizedBox(height: 8),
           if (variants.isEmpty)
-            const Text('Henüz masaüstü sürümü yok (yalnızca mağaza linki). "Yayın" sekmesinden eklenir.',
-                style: TextStyle(color: Colors.white54, fontSize: 12)),
+            const Text(
+              'Henüz masaüstü sürümü yok (yalnızca mağaza linki). "Yayın" sekmesinden eklenir.',
+              style: TextStyle(color: Colors.white54, fontSize: 12),
+            ),
           for (final v in variants)
             Padding(
               padding: const EdgeInsets.only(bottom: 4),
@@ -565,8 +666,8 @@ class _AdminScreenState extends State<AdminScreen> {
   Widget _publishTab() {
     final plan = _plan;
     final canPublish = plan != null && plan.problems.isEmpty && !_busy;
-    final variants =
-        ((_catalog?.app(_selectedId ?? '')?['variants'] as List?) ?? const []).cast<Map<String, dynamic>>();
+    final variants = ((_catalog?.app(_selectedId ?? '')?['variants'] as List?) ?? const [])
+        .cast<Map<String, dynamic>>();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -629,9 +730,80 @@ class _AdminScreenState extends State<AdminScreen> {
           _f('Varyant kimliği', _variantId, onChanged: _touchPlan),
           _f('Varyant adı', _variantName, onChanged: _touchPlan),
         ]),
+        if (_os == 'windows') ...[
+          Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Text('Kurulum şekli', style: GoogleFonts.inter(fontSize: 12, color: const Color(0xFF00E5FF))),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: SegmentedButton<String>(
+              showSelectedIcon: false,
+              segments: const [
+                ButtonSegment(value: 'portable', label: Text('Portable (dosya senkronu)')),
+                ButtonSegment(value: 'msi', label: Text('MSI')),
+                ButtonSegment(value: 'inno', label: Text('Inno Setup')),
+              ],
+              selected: {_instType},
+              onSelectionChanged: (v) => setState(() {
+                _instType = v.first;
+                _plan = null;
+              }),
+            ),
+          ),
+          if (_instType != 'portable') ...[
+            _row([
+              _f(
+                'Kurucu dosya (klasöre göre yol)',
+                _setupFile,
+                flex: 3,
+                hint: _instType == 'msi' ? 'Flykobi.msi' : 'FlykobiSetup.exe',
+              ),
+              if (plan != null && plan.manifest.files.isNotEmpty)
+                PopupMenuButton<String>(
+                  tooltip: 'Taranan dosyalardan seç',
+                  icon: const Icon(Icons.list),
+                  itemBuilder: (_) => [
+                    for (final f in plan.manifest.files.take(200)) PopupMenuItem(value: f.rel, child: Text(f.rel)),
+                  ],
+                  onSelected: (v) => setState(() => _setupFile.text = v),
+                ),
+            ]),
+            _row([
+              _f(
+                'Kurulu program adı (Programlar ve Özellikler)',
+                _displayName,
+                flex: 3,
+                hint: 'Flykobi',
+                helper:
+                    'Kurulu mu / sürüm / kaldırma buna bakar (önek eşleşir). MSI ürün kodu sürümle değiştiği için ad kullanılır.',
+              ),
+            ]),
+            _row([
+              _f(
+                'Ek kurucu parametreleri (her satıra bir tane)',
+                _setupArgs,
+                maxLines: 2,
+                hint: _instType == 'msi' ? 'ALLUSERS=1' : '/TASKS=desktopicon',
+                helper:
+                    'Sessiz parametreler otomatik eklenir: ${_instType == 'msi' ? '/qn /norestart' : '/VERYSILENT /SUPPRESSMSGBOXES /NORESTART'}',
+              ),
+            ]),
+          ],
+        ],
         _row([
-          _f('Çalıştırılacak dosya (klasöre göre yol)', _exe, flex: 3, hint: 'bin/uygulama', onChanged: _touchPlan),
-          if (plan != null && plan.manifest.files.isNotEmpty)
+          _f(
+            _os == 'windows' && _instType != 'portable'
+                ? 'Kurulu uygulamanın yolu'
+                : 'Çalıştırılacak dosya (klasöre göre yol)',
+            _exe,
+            flex: 3,
+            hint: _os == 'windows' && _instType != 'portable' ? r'%ProgramFiles%\Flykobi\flykobi.exe' : 'bin/uygulama',
+            helper: _os == 'windows' && _instType != 'portable'
+                ? 'Ortam değişkenleri açılır; göreliyse kayıt defterindeki kurulum klasörüne göre çözülür.'
+                : null,
+          ),
+          if (_instType == 'portable' && plan != null && plan.manifest.files.isNotEmpty)
             PopupMenuButton<String>(
               tooltip: 'Taranan dosyalardan seç',
               icon: const Icon(Icons.list),
@@ -641,19 +813,23 @@ class _AdminScreenState extends State<AdminScreen> {
               onSelected: (v) => setState(() => _exe.text = v),
             ),
         ]),
-        _row([_f('Argümanlar (her satıra bir tane)', _args, maxLines: 3, onChanged: _touchPlan)]),
-        Wrap(spacing: 12, runSpacing: 8, children: [
-          FilledButton.icon(
-            onPressed: _busy ? null : _scan,
-            icon: const Icon(Icons.search, size: 16),
-            label: const Text('Tara ve önizle'),
-          ),
-          FilledButton.icon(
-            onPressed: canPublish ? _publish : null,
-            icon: const Icon(Icons.cloud_upload_outlined, size: 16),
-            label: const Text('Sunucuya yükle ve yayınla'),
-          ),
-        ]),
+        _row([_f('Argümanlar (her satıra bir tane)', _args, maxLines: 3)]),
+        Wrap(
+          spacing: 12,
+          runSpacing: 8,
+          children: [
+            FilledButton.icon(
+              onPressed: _busy ? null : _scan,
+              icon: const Icon(Icons.search, size: 16),
+              label: const Text('Tara ve önizle'),
+            ),
+            FilledButton.icon(
+              onPressed: canPublish ? _publish : null,
+              icon: const Icon(Icons.cloud_upload_outlined, size: 16),
+              label: const Text('Sunucuya yükle ve yayınla'),
+            ),
+          ],
+        ),
       ],
     );
   }
@@ -693,10 +869,7 @@ class _AdminScreenState extends State<AdminScreen> {
     child: Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (var i = 0; i < children.length; i++) ...[
-          if (i > 0) const SizedBox(width: 10),
-          children[i],
-        ],
+        for (var i = 0; i < children.length; i++) ...[if (i > 0) const SizedBox(width: 10), children[i]],
       ],
     ),
   );

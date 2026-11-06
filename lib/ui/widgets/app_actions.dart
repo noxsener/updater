@@ -8,6 +8,26 @@ import 'progress_bars.dart';
 
 const _cyan = Color(0xFF00E5FF);
 
+/// Onay sorar, onaylanırsa uygulamayı kaldırır.
+Future<void> confirmUninstall(BuildContext context, AppController c) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text('${c.app.name} kaldırılsın mı?'),
+      content: Text(
+        c.target?.installer != null
+            ? 'Uygulama Windows\'tan kaldırılır (yönetici izni istenebilir).'
+            : 'Uygulamanın indirilen dosyaları silinir.',
+      ),
+      actions: [
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('VAZGEÇ')),
+        TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('KALDIR')),
+      ],
+    ),
+  );
+  if (ok == true) await c.uninstall();
+}
+
 /// İndir / Güncelle / Aç / Mağazaya git düğmeleri ve ilerleme. Kart ve detay
 /// sayfası aynı widget'ı kullanır.
 class AppActions extends StatelessWidget {

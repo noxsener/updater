@@ -21,6 +21,69 @@ Katalog adresi derleme zamanında verilir:
 
 `id` alanları (`app` ve `variant`) dosya yolunda kullanıldığı için yalnızca `A-Z a-z 0-9 . _ -` içerebilir.
 
+## Windows kurucuları (MSI / Inno Setup)
+
+Windows hedefine `installer` eklenirse uygulama dosya senkronu yerine **kurucuyla** kurulur. `manifestUrl` kurucu dosyayı (sha256 doğrulamalı) dağıtır, `launch.exe` kurulu uygulamanın yoludur.
+
+```json
+"windows": {
+  "manifestUrl": "https://.../flykobi/std/windows/files.json",
+  "launch": { "exe": "%ProgramFiles%\\Flykobi\\flykobi.exe" },
+  "installer": { "type": "inno", "file": "FlykobiSetup.exe", "displayName": "Flykobi", "args": [] }
+}
+```
+
+- `type`: `msi` → `msiexec /i <dosya> /qn /norestart`; `inno` → `<dosya> /VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-`. `args` bunlara eklenir (örn. `ALLUSERS=1`). Kurucu UAC ile (makine başına) çalışır; `0`, `1641`, `3010` başarı sayılır.
+- **Kurulu mu / sürüm:** kayıt defterindeki "Programlar ve Özellikler" listesinden `displayName` ile (önek, büyük/küçük harf duyarsız) bulunur; gösterilen sürüm `DisplayVersion`'dır. MSI ürün kodu her sürümde değiştiği için ad kullanılır.
+- **Güncelleme:** manifestteki `version` kurulu `DisplayVersion`'dan farklıysa "Güncelle" çıkar (`1.2` ile `1.2.0` aynı sayılır) ve kurucu üstüne kurulur. `version` yoksa manifest parmak izine bakılır. Bu yüzden kurucu uygulamalarda manifest `version` yazılmalıdır.
+- **Aç:** `launch.exe` ortam değişkenleri açılarak kullanılır; göreliyse kayıt defterindeki kurulum klasörüne göre çözülür.
+- **Kaldır:** kayıt defterindeki `QuietUninstallString` (MSI'da `msiexec /x {ürün-kodu} /qn`) çalışır; program listeden kalkmazsa hata verilir.
+- Başarılı kurulumdan sonra indirilen kurucu dosyaları silinir. Portable uygulamalar `installer` olmadan eskisi gibi çalışır.
+
+## Bağımlılıklar (VC++ Redist, DirectX...)
+
+Uygulamalar ortak bileşenleri `requires` ile ister; bileşenler katalogdaki `dependencies` listesinde tanımlanır. Kurulumda uygulamadan **önce**, yalnızca eksikse kurulur; biri kurulamazsa uygulama kurulmaz. Kaldırma bağımlılıkları silmez (ortaktır).
+
+```json
+{ "dependencies": [ {
+    "id": "vcredist-2022", "name": "VC++ 2015-2022 (x64)",
+    "desktop": { "windows": {
+      "manifestUrl": "https://.../_deps/vcredist-2022/windows/files.json",
+      "run": { "exe": "vc_redist.x64.exe", "args": ["/install", "/quiet", "/norestart"] },
+      "detect": { "registryKey": "HKLM\\SOFTWARE\\Microsoft\\VisualStudio\\14.0\\VC\\Runtimes\\x64", "registryValue": "Installed", "equals": "1" },
+      "successCodes": [0, 1638, 1641, 3010]
+  } } } ],
+  "apps": [ { "id": "flykobi", "requires": ["vcredist-2022"], "...": "..." } ] }
+```
+
+- Dosyalar uygulamalarla aynı `files.json` düzeniyle (sha256 doğrulamalı) `<AppSupport>/deps/<id>/<os>/` altına inip `run` çalıştırılır. Klasör birden çok dosya içerebilir (DirectX: `DXSETUP.exe` + `.cab`'lar).
+- `detect`: `registryKey` (+ `registryValue`, `equals`; yalnızca Windows) ve/veya `file` (`%ProgramFiles%` gibi değişkenler açılır). Sağlanıyorsa kurucu çalışmaz. Yoksa daha önce kurulduğu ve manifestin değişmediği kayıttan anlaşılır.
+- Windows'ta kurucu UAC ile (yönetici izniyle) çalışır; diğer sistemlerde izinsiz doğrudan çalışır.
+- **Linux paketleri (apt):** Linux hedefinde `manifestUrl`/`run` yerine `"apt": { "packages": ["libgtk-3-0"], "offlineManifestUrl": ".../_deps/libs/linux/files.json" }` verilir. Kurulu olmayan paketler için önce `https://checkip.amazonaws.com` denenir: yanıt gelirse `apt-get install -y`, gelmezse `offlineManifestUrl`'deki `.deb` dosyaları indirilip `dpkg -i` ile kurulur (çevrimdışı pakette bağımlı `.deb`'lerin hepsi bulunmalı). Root değilse `pkexec` parola penceresi açar. `apt-get` olmayan dağıtımlarda bağımlılık atlanır. Paket adları `a-z 0-9 + . : _ -` ile sınırlıdır.
+- `successCodes` verilmezse `0, 1638, 1641, 3010` başarı sayılır.
+
+## İşletim sistemleri / ISO (`downloads`)
+
+Kurulmayan, yalnızca indirilen büyük dosyalar (ISO vb.) için ayrı bir bölüm. Masaüstünde **İşletim Sistemleri** sekmesi (katalogda en az bir kayıt varsa) görünür. Dosya, işletim sisteminin **İndirilenler** klasörüne iner.
+
+```json
+{ "downloads": [ {
+  "id": "ubuntu", "name": "Ubuntu Desktop", "version": "26.04", "category": "İşletim Sistemleri",
+  "description": "...", "logoUrl": "https://.../logo.png",
+  "files": [
+    { "name": "Desktop (amd64)", "fileName": "ubuntu-26.04-desktop-amd64.iso",
+      "url": "https://media.codenfast.com/_files/ubuntu/ubuntu-26.04-desktop-amd64.iso",
+      "sha256": "<64 hane>", "size": 6200000000 },
+    { "name": "Desktop (arm64)", "fileName": "ubuntu-26.04-desktop-arm64.iso",
+      "url": "https://releases.ubuntu.com/.../ubuntu-26.04-desktop-arm64.iso", "sha256": "<64 hane>" }
+  ] } ] }
+```
+
+- `files` birden çoksa kartta seçici çıkar. `url` kendi sunucumuz ya da harici yansı olabilir (https zorunlu).
+- `sha256` zorunludur; doğrulanmadan dosya son adını almaz, uyuşmazsa silinir. `size` isteğe bağlıdır.
+- İndirme **durdurulabilir ve devam eder**: yarım dosya `<ad>.part` olarak kalır, sunucu `Range` destekliyorsa kaldığı yerden sürer.
+- `fileName` yalnızca `A-Z a-z 0-9 . _ -` içerebilir. Aynı ad zaten indirilmiş ve sha256'sı doğruysa yeniden indirilmez.
+
 ## catalog.json
 
 ```json

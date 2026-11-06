@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 
 import '../models/catalog.dart';
+import 'download_controller.dart';
+import 'download_service.dart';
 import 'update_service.dart';
 
 /// Tek bir ürünün (seçili varyantıyla) ekran durumu. Kartlar, detay sayfası ve
@@ -119,10 +121,17 @@ class AppController extends ChangeNotifier {
 
 class StoreController extends ChangeNotifier {
   final List<AppController> apps;
+  final List<DownloadController> downloads;
   bool updatingAll = false;
 
-  StoreController(Catalog catalog, UpdateService service)
-    : apps = [for (final a in catalog.apps) AppController(a, service)] {
+  StoreController(Catalog catalog, UpdateService service, {DownloadService? downloadService})
+    : apps = [for (final a in catalog.apps) AppController(a, service)],
+      downloads = [
+        if (downloadService != null) for (final d in catalog.downloads) DownloadController(d, downloadService),
+      ] {
+    for (final d in downloads) {
+      d.addListener(notifyListeners);
+    }
     for (final c in apps) {
       c.addListener(notifyListeners);
     }
@@ -152,6 +161,10 @@ class StoreController extends ChangeNotifier {
 
   @override
   void dispose() {
+    for (final d in downloads) {
+      d.removeListener(notifyListeners);
+      d.dispose();
+    }
     for (final c in apps) {
       c.removeListener(notifyListeners);
       c.dispose();

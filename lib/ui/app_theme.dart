@@ -40,6 +40,17 @@ ThemeData buildAppTheme() {
           selectedColor: Color(0xFF00E5FF),
           subtitleTextStyle: TextStyle(fontSize: 12, color: Colors.white70),
         ),
+        // Varsayılan renk ColorScheme.primary (koyu) olduğundan koyu zeminde okunmuyordu.
+        outlinedButtonTheme: OutlinedButtonThemeData(
+          style: ButtonStyle(
+            foregroundColor: WidgetStateProperty.resolveWith(
+              (s) => s.contains(WidgetState.disabled) ? Colors.white38 : const Color(0xFF00E5FF),
+            ),
+            side: WidgetStateProperty.resolveWith(
+              (s) => BorderSide(color: s.contains(WidgetState.disabled) ? Colors.white24 : const Color(0x8000E5FF)),
+            ),
+          ),
+        ),
         segmentedButtonTheme: SegmentedButtonThemeData(
           style: ButtonStyle(
             foregroundColor: WidgetStateProperty.resolveWith(

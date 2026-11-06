@@ -25,22 +25,6 @@ class _AppDetailPageState extends State<AppDetailPage> {
     widget.c.refresh(needInfo: true);
   }
 
-  Future<void> _confirmUninstall() async {
-    final c = widget.c;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text('${c.app.name} kaldırılsın mı?'),
-        content: const Text('Uygulamanın indirilen dosyaları silinir.'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('VAZGEÇ')),
-          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('KALDIR')),
-        ],
-      ),
-    );
-    if (ok == true) await c.uninstall();
-  }
-
   @override
   Widget build(BuildContext context) {
     final c = widget.c;
@@ -84,7 +68,7 @@ class _AppDetailPageState extends State<AppDetailPage> {
                       const SizedBox(height: 8),
                       OutlinedButton.icon(
                         style: OutlinedButton.styleFrom(foregroundColor: const Color(0xFFFF5370)),
-                        onPressed: _confirmUninstall,
+                        onPressed: () => confirmUninstall(context, c),
                         icon: const Icon(Icons.delete_outline, size: 16),
                         label: const Text('Kaldır'),
                       ),
