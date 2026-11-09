@@ -232,7 +232,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   Timer? _logoSwitchTimer;
 
   static const List<String> _logoAssets = [
-    'assets/images/DeadLineLogo.png',
+    'assets/images/DeadLineLogo.jpeg',
     'assets/images/codenfast_logo_transparent_2688_1242.webp',
   ];
 
